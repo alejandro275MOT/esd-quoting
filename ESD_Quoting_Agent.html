@@ -1,0 +1,1022 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ESD Quoting Agent</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap');
+  :root {
+    --bg:#f4f6f9;--surface:#fff;--surface2:#f0f2f5;--border:#dde1e9;
+    --accent:#1a56db;--accent-h:#1446c0;--accent2:#e05a1a;--accent3:#0e7a4e;
+    --purple:#6d28d9;--purple-light:#f5f3ff;--purple-border:#ddd6fe;
+    --text:#1a202c;--text-dim:#4a5568;--text-muted:#a0aec0;
+    --shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.04);
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+  .app{max-width:1100px;margin:0 auto;padding:28px 24px;}
+
+  .header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;padding-bottom:20px;border-bottom:2px solid var(--border);}
+  .logo{display:flex;align-items:center;gap:14px;}
+  .logo-icon{width:44px;height:44px;background:linear-gradient(135deg,var(--accent),#2d6ee8);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 2px 8px rgba(26,86,219,.3);}
+  .logo-text{font-family:'Syne',sans-serif;font-weight:800;font-size:22px;letter-spacing:-.5px;}
+  .logo-text span{color:var(--accent);}
+  .status-badge{display:flex;align-items:center;gap:7px;font-family:'DM Mono',monospace;font-size:11px;color:var(--accent3);background:#ecfdf5;border:1px solid #a7f3d0;padding:7px 14px;border-radius:20px;font-weight:500;}
+  .status-dot{width:7px;height:7px;border-radius:50%;background:var(--accent3);animation:pulse 2s infinite;}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+  /* Credit warning banner */
+  .credit-warning{display:none;background:#fef2f2;border:2px solid #fca5a5;border-radius:10px;padding:14px 18px;margin-bottom:20px;font-family:'DM Mono',monospace;font-size:12px;color:#c0392b;align-items:center;gap:12px;}
+  .credit-warning.show{display:flex;}
+  .credit-warning-icon{font-size:20px;}
+
+  .mode-switcher{display:flex;background:var(--surface);border:1.5px solid var(--border);border-radius:12px;padding:6px;gap:6px;margin-bottom:24px;box-shadow:var(--shadow);}
+  .mode-btn{flex:1;padding:12px 20px;border-radius:8px;border:none;cursor:pointer;font-family:'Syne',sans-serif;font-weight:700;font-size:14px;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:10px;}
+  .mode-btn .mode-desc{font-family:'DM Mono',monospace;font-size:10px;font-weight:400;display:block;margin-top:2px;opacity:.7;}
+  .mode-btn-quote{background:var(--surface2);color:var(--text-dim);}
+  .mode-btn-quote.active{background:var(--accent);color:white;box-shadow:0 2px 8px rgba(26,86,219,.3);}
+  .mode-btn-teach{background:var(--surface2);color:var(--text-dim);}
+  .mode-btn-teach.active{background:var(--purple);color:white;box-shadow:0 2px 8px rgba(109,40,217,.3);}
+
+  .mode-panel{display:none;}
+  .mode-panel.active{display:block;}
+
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;}
+  .panel{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:var(--shadow);}
+  .panel-full{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:20px;box-shadow:var(--shadow);}
+  .panel-header{padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;background:var(--surface2);}
+  .panel-label{font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-dim);}
+  .panel-body{padding:20px;}
+  .panel-header-purple{background:#f5f3ff;border-bottom:1px solid var(--purple-border);}
+
+  .field-group{display:flex;flex-direction:column;gap:6px;margin-bottom:12px;}
+  .field-label{font-family:'DM Mono',monospace;font-size:10px;color:var(--text-dim);letter-spacing:1px;text-transform:uppercase;font-weight:500;}
+  .field-input{background:var(--bg);border:1.5px solid var(--border);border-radius:8px;padding:10px 14px;color:var(--text);font-family:'DM Mono',monospace;font-size:12px;outline:none;transition:all .2s;width:100%;}
+  .field-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(26,86,219,.12);}
+  .field-input::placeholder{color:var(--text-muted);}
+  .field-input[readonly]{background:#f0f2f5;color:var(--text-dim);}
+
+  .btn{display:flex;align-items:center;justify-content:center;gap:8px;padding:11px 20px;border-radius:8px;font-family:'DM Mono',monospace;font-size:12px;font-weight:500;cursor:pointer;border:none;transition:all .15s;letter-spacing:.3px;white-space:nowrap;}
+  .btn-primary{background:var(--accent);color:white;font-weight:600;box-shadow:0 1px 3px rgba(26,86,219,.3);}
+  .btn-primary:hover:not(:disabled){background:var(--accent-h);transform:translateY(-1px);box-shadow:0 4px 12px rgba(26,86,219,.3);}
+  .btn-primary:disabled{opacity:.45;cursor:not-allowed;}
+  .btn-secondary{background:var(--surface);color:var(--text-dim);border:1.5px solid var(--border);}
+  .btn-secondary:hover{border-color:var(--accent);color:var(--accent);}
+  .btn-success{background:var(--accent3);color:white;font-weight:600;}
+  .btn-success:hover:not(:disabled){background:#0a6642;transform:translateY(-1px);}
+  .btn-success:disabled{opacity:.45;cursor:not-allowed;}
+  .btn-purple{background:var(--purple);color:white;font-weight:600;box-shadow:0 1px 3px rgba(109,40,217,.3);}
+  .btn-purple:hover:not(:disabled){background:#5b21b6;transform:translateY(-1px);}
+  .btn-purple:disabled{opacity:.45;cursor:not-allowed;}
+  .btn-orange{background:var(--accent2);color:white;font-weight:600;}
+  .btn-orange:hover:not(:disabled){background:#c04a10;transform:translateY(-1px);}
+  .action-row{display:flex;gap:10px;margin-top:12px;align-items:center;flex-wrap:wrap;}
+  .action-row .btn{flex:1;}
+
+  .stats-row{display:flex;gap:8px;margin-top:14px;}
+  .stat-chip{flex:1;background:var(--bg);border:1.5px solid var(--border);border-radius:8px;padding:10px;text-align:center;}
+  .stat-value{font-family:'Syne',sans-serif;font-weight:700;font-size:22px;color:var(--accent);line-height:1;}
+  .stat-label{font-family:'DM Mono',monospace;font-size:9px;color:var(--text-muted);margin-top:4px;letter-spacing:.5px;text-transform:uppercase;}
+
+  .job-types-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;}
+  .job-type-card{background:var(--bg);border:1.5px solid var(--border);border-radius:8px;padding:12px;cursor:pointer;transition:all .15s;}
+  .job-type-card:hover,.job-type-card.selected{border-color:var(--accent);background:#eff4ff;}
+  .job-type-card.selected{box-shadow:0 0 0 1px var(--accent);}
+  .job-type-name{font-family:'Syne',sans-serif;font-weight:600;font-size:12px;margin-bottom:4px;}
+  .job-type-meta{font-family:'DM Mono',monospace;font-size:10px;color:var(--text-muted);}
+
+  .upload-zone{border:2px dashed var(--border);border-radius:10px;padding:20px;text-align:center;cursor:pointer;transition:all .2s;background:var(--bg);position:relative;}
+  .upload-zone:hover,.upload-zone.dragover{border-color:var(--accent);background:#eff4ff;}
+  .upload-zone.purple:hover,.upload-zone.purple.dragover{border-color:var(--purple);background:var(--purple-light);}
+  .upload-zone input[type="file"]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+  .upload-icon{font-size:24px;margin-bottom:6px;}
+  .upload-text{font-family:'DM Mono',monospace;font-size:11px;color:var(--text-dim);line-height:1.6;}
+  .upload-text strong{color:var(--accent);}
+  .upload-text strong.purple{color:var(--purple);}
+  .file-chip{background:var(--bg);border:1.5px solid var(--border);border-radius:8px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;margin-top:8px;}
+  .file-name{font-family:'DM Mono',monospace;font-size:11px;color:var(--accent);font-weight:500;}
+  .file-size{font-family:'DM Mono',monospace;font-size:10px;color:var(--text-muted);}
+  .file-remove{font-size:14px;cursor:pointer;color:var(--text-muted);padding:2px 6px;border-radius:4px;}
+  .file-remove:hover{color:#c0392b;background:#fef2f2;}
+
+  .request-area{width:100%;background:var(--bg);border:1.5px solid var(--border);border-radius:8px;padding:14px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;line-height:1.6;resize:vertical;min-height:120px;outline:none;transition:all .2s;}
+  .request-area:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(26,86,219,.12);}
+  .request-area::placeholder{color:var(--text-muted);}
+  .request-area.prefilled{border-color:var(--purple);background:#faf5ff;box-shadow:0 0 0 3px rgba(109,40,217,.08);}
+
+  .alert{padding:10px 14px;border-radius:8px;font-size:12px;font-family:'DM Mono',monospace;margin-top:10px;}
+  .alert-success{background:#ecfdf5;border:1px solid #6ee7b7;color:var(--accent3);}
+  .alert-error{background:#fef2f2;border:1px solid #fca5a5;color:#c0392b;}
+  .alert-warning{background:#fffbeb;border:1px solid #fcd34d;color:#b45309;}
+  .alert-info{background:#eff4ff;border:1px solid #bfdbfe;color:var(--accent);}
+  .alert-purple{background:var(--purple-light);border:1px solid var(--purple-border);color:var(--purple);}
+
+  .tag{display:inline-flex;align-items:center;padding:3px 9px;border-radius:5px;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;}
+  .tag-blue{background:#eff4ff;color:var(--accent);border:1px solid #bfdbfe;}
+  .tag-green{background:#ecfdf5;color:var(--accent3);border:1px solid #a7f3d0;}
+  .tag-orange{background:#fff7ed;color:var(--accent2);border:1px solid #fed7aa;}
+  .tag-purple{background:var(--purple-light);color:var(--purple);border:1px solid var(--purple-border);}
+
+  .table-wrap{overflow-x:auto;border-radius:8px;border:1px solid var(--border);}
+  .data-table{width:100%;border-collapse:collapse;font-size:12px;}
+  .data-table th{font-family:'DM Mono',monospace;font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;padding:10px 12px;background:var(--surface2);text-align:left;border-bottom:1px solid var(--border);font-weight:500;}
+  .data-table td{padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:middle;}
+  .data-table tr:last-child td{border-bottom:none;}
+  .data-table tr:hover td{background:#f8faff;}
+  .mono{font-family:'DM Mono',monospace;font-size:11px;}
+  .cost-green{font-family:'DM Mono',monospace;color:var(--accent3);font-weight:500;text-align:right;}
+  .cost-orange{font-family:'DM Mono',monospace;color:var(--accent2);font-weight:500;text-align:right;}
+  .sku{font-family:'DM Mono',monospace;font-size:11px;color:var(--accent);font-weight:500;}
+  .cat-badge{font-size:10px;padding:2px 6px;border-radius:4px;background:var(--surface2);color:var(--text-dim);border:1px solid var(--border);white-space:nowrap;}
+
+  .pricing-grid{display:grid;gap:6px;}
+  .pricing-row{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--bg);border-radius:7px;font-size:13px;border:1px solid var(--border);}
+  .pricing-row.total{background:#eff4ff;border:2px solid var(--accent);font-family:'Syne',sans-serif;font-weight:700;font-size:17px;margin-top:4px;}
+  .pricing-row.total .pval{color:var(--accent);}
+  .plabel{color:var(--text-dim);}
+  .pval{font-family:'DM Mono',monospace;color:var(--accent3);font-weight:500;}
+  .pricing-input-row{display:flex;justify-content:space-between;align-items:center;padding:7px 14px;background:var(--bg);border-radius:7px;font-size:13px;border:1px solid var(--border);}
+  .pct-input{background:white;border:1.5px solid var(--border);border-radius:5px;padding:4px 8px;color:var(--accent);font-family:'DM Mono',monospace;font-size:12px;width:64px;text-align:right;outline:none;font-weight:500;}
+
+  .empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:52px 20px;color:var(--text-muted);text-align:center;gap:12px;}
+  .empty-icon{font-size:42px;opacity:.35;}
+  .empty-text{font-family:'DM Mono',monospace;font-size:12px;line-height:1.7;}
+  .thinking{display:flex;align-items:center;gap:12px;padding:24px;color:var(--text-dim);font-family:'DM Mono',monospace;font-size:12px;}
+  .dots{display:flex;gap:4px;}
+  .dots span{width:7px;height:7px;border-radius:50%;background:var(--accent);animation:bounce 1.4s infinite;}
+  .dots span:nth-child(2){animation-delay:.2s;}
+  .dots span:nth-child(3){animation-delay:.4s;}
+  @keyframes bounce{0%,80%,100%{transform:translateY(0);opacity:.3}40%{transform:translateY(-8px);opacity:1}}
+
+  .q-section{margin-bottom:22px;}
+  .q-title{font-family:'Syne',sans-serif;font-weight:700;font-size:12px;color:var(--accent);text-transform:uppercase;letter-spacing:1.2px;margin-bottom:10px;padding-bottom:8px;border-bottom:2px solid var(--border);}
+  .notes-box{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:13px;line-height:1.7;color:var(--text-dim);white-space:pre-wrap;}
+
+  .export-row{display:flex;gap:10px;padding:16px 20px;border-top:1px solid var(--border);background:var(--surface2);flex-wrap:wrap;}
+  .response-area{min-height:200px;}
+  .response-content{padding:24px;}
+
+  .preview-section{margin-bottom:20px;}
+  .preview-title{font-family:'Syne',sans-serif;font-weight:700;font-size:12px;color:var(--purple);text-transform:uppercase;letter-spacing:1.2px;margin-bottom:10px;padding-bottom:8px;border-bottom:2px solid var(--purple-border);}
+  .editable-field{width:100%;background:white;border:1.5px solid var(--purple-border);border-radius:8px;padding:10px 14px;color:var(--text);font-family:'DM Mono',monospace;font-size:12px;outline:none;transition:all .2s;}
+  .editable-field:focus{border-color:var(--purple);box-shadow:0 0 0 3px rgba(109,40,217,.1);}
+
+  @media print{
+    body{background:white;}
+    .header,.mode-switcher,.grid-2,.panel-full:not(#output-panel),.export-row,.action-row,.credit-warning{display:none!important;}
+    .panel-full{border:none;box-shadow:none;}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="logo">
+      <div class="logo-icon">⚡</div>
+      <div>
+        <div class="logo-text">ESD <span>Quoting</span> Agent</div>
+        <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text-muted);margin-top:2px;">AI-POWERED ESTIMATING SYSTEM</div>
+      </div>
+    </div>
+    <div class="status-badge"><div class="status-dot"></div>SYSTEM READY</div>
+  </div>
+
+  <!-- CORS / file:// warning banner -->
+  <div id="cors-warning" style="display:none;background:#fffbeb;border:2px solid #fcd34d;border-radius:10px;padding:16px 18px;margin-bottom:20px;font-family:'DM Mono',monospace;font-size:12px;color:#92400e;">
+    <div style="display:flex;align-items:flex-start;gap:12px;">
+      <div style="font-size:22px">⚠️</div>
+      <div>
+        <div style="font-weight:700;font-size:13px;margin-bottom:8px;">Browser Security Warning — File Cannot Make API Calls</div>
+        <div style="line-height:1.8;">Your browser is blocking API calls because the file is opened directly from your computer.<br>
+        <strong>To fix this, choose one of these options:</strong><br><br>
+        <strong>Option A — Chrome (easiest):</strong> Open Chrome, go to the address bar and type <code style="background:#fef3c7;padding:2px 6px;border-radius:3px;">chrome://flags/#block-insecure-private-network-requests</code> → set to <strong>Disabled</strong> → Relaunch Chrome.<br><br>
+        <strong>Option B — Run a local server (Windows):</strong> Open Command Prompt and run:<br>
+        <code style="background:#fef3c7;padding:2px 6px;border-radius:3px;display:inline-block;margin-top:4px;">cd %USERPROFILE%\Downloads && python -m http.server 8080</code><br>
+        Then open: <code style="background:#fef3c7;padding:2px 6px;border-radius:3px;">http://localhost:8080/ESD_Quoting_Agent.html</code><br><br>
+        <strong>Option B — Run a local server (Mac):</strong> Open Terminal and run:<br>
+        <code style="background:#fef3c7;padding:2px 6px;border-radius:3px;display:inline-block;margin-top:4px;">cd ~/Downloads && python3 -m http.server 8080</code><br>
+        Then open: <code style="background:#fef3c7;padding:2px 6px;border-radius:3px;">http://localhost:8080/ESD_Quoting_Agent.html</code>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Credit warning banner -->
+  <div class="credit-warning" id="credit-warning">
+    <div class="credit-warning-icon">⚠️</div>
+    <div>
+      <strong>Low API Credits Warning</strong><br>
+      Your Anthropic API credits are at $5.00 or below. Please top up at <strong>console.anthropic.com</strong> to avoid service interruption.
+    </div>
+  </div>
+
+  <!-- Mode switcher -->
+  <div class="mode-switcher">
+    <button class="mode-btn mode-btn-quote active" onclick="setMode('quote')" id="btn-quote">
+      <span>⚡</span>
+      <span><span style="display:block">QUOTE MODE</span><span class="mode-desc">Generate a quote from scope or schematic</span></span>
+    </button>
+    <button class="mode-btn mode-btn-teach" onclick="setMode('teach')" id="btn-teach">
+      <span>🎓</span>
+      <span><span style="display:block">TEACH MODE</span><span class="mode-desc">Upload past jobs to train the agent</span></span>
+    </button>
+  </div>
+
+  <!-- ═══════════════════ QUOTE MODE ═══════════════════ -->
+  <div class="mode-panel active" id="panel-quote">
+
+    <div class="grid-2">
+      <div class="panel">
+        <div class="panel-header"><span>🔑</span><span class="panel-label">API & Airtable Connection</span></div>
+        <div class="panel-body">
+          <div class="field-group">
+            <label class="field-label">Anthropic API Key</label>
+            <input class="field-input" type="password" id="anthropic-key" placeholder="sk-ant-api03-••••••••••••••••">
+          </div>
+          <div class="field-group">
+            <label class="field-label">Airtable Personal Access Token</label>
+            <input class="field-input" type="password" id="q-token" placeholder="pat••••••••••••••••">
+          </div>
+          <div class="field-group">
+            <label class="field-label">Base ID (pre-configured)</label>
+            <input class="field-input" type="text" id="q-baseid" value="appfK5n81xyZNbrUk" readonly>
+          </div>
+          <button class="btn btn-primary" onclick="loadDB()" id="q-load-btn">⚡ Load Database</button>
+          <div class="stats-row" id="q-stats" style="display:none">
+            <div class="stat-chip"><div class="stat-value" id="q-stat-parts">0</div><div class="stat-label">Parts</div></div>
+            <div class="stat-chip"><div class="stat-value" id="q-stat-jobs">0</div><div class="stat-label">Jobs</div></div>
+            <div class="stat-chip"><div class="stat-value" id="q-stat-types">0</div><div class="stat-label">Types</div></div>
+            <div class="stat-chip"><div class="stat-value" id="q-stat-quotes">0</div><div class="stat-label">Quotes</div></div>
+          </div>
+          <div id="q-load-alert"></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header"><span>🏗️</span><span class="panel-label">Job Type Template</span></div>
+        <div class="panel-body">
+          <div id="q-jobtypes"><div class="empty-state" style="padding:20px"><div class="empty-text">Load database first</div></div></div>
+          <div class="field-group">
+            <label class="field-label">Job Number</label>
+            <input class="field-input" type="text" id="q-jobnum" placeholder="e.g. 53679">
+          </div>
+          <div class="field-group">
+            <label class="field-label">Customer Name</label>
+            <input class="field-input" type="text" id="q-customer" placeholder="e.g. Acme Industries">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Schematic upload -->
+    <div class="panel-full">
+      <div class="panel-header"><span>📐</span><span class="panel-label">Schematic / Drawing</span><span style="margin-left:8px;font-family:'DM Mono',monospace;font-size:10px;color:var(--text-muted);">Optional — auto-extracts scope</span></div>
+      <div class="panel-body">
+        <div class="upload-zone" id="q-drop" ondragover="doDragOver(event,'q-drop')" ondragleave="doDragLeave('q-drop')" ondrop="doDrop(event,'q-schematic')">
+          <input type="file" id="q-schematic" accept=".pdf,.png,.jpg,.jpeg,.webp" onchange="onFileSelect(event,'q-schematic')">
+          <div class="upload-icon">📄</div>
+          <div class="upload-text"><strong>Click to upload</strong> or drag & drop · PDF or image</div>
+        </div>
+        <div id="q-schematic-chip" style="display:none"></div>
+        <div id="q-extract-status" style="display:none"></div>
+        <div style="display:flex;gap:10px;margin-top:10px">
+          <button class="btn btn-purple" id="q-extract-btn" onclick="extractScope()" disabled style="display:none">🔍 Read Schematic & Pre-fill Scope</button>
+          <button class="btn btn-secondary" id="q-clear-schematic" onclick="clearQSchematic()" style="display:none">✕ Remove</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- BOM CSV upload -->
+    <div class="panel-full">
+      <div class="panel-header"><span>📊</span><span class="panel-label">BOM / Parts CSV</span><span style="margin-left:8px;font-family:'DM Mono',monospace;font-size:10px;color:var(--text-muted);">Optional — pre-loads known parts list</span></div>
+      <div class="panel-body">
+        <div class="upload-zone" id="q-csv-drop" ondragover="doDragOver(event,'q-csv-drop')" ondragleave="doDragLeave('q-csv-drop')" ondrop="doDrop(event,'q-csv')">
+          <input type="file" id="q-csv" accept=".csv" onchange="onFileSelect(event,'q-csv')">
+          <div class="upload-icon">📋</div>
+          <div class="upload-text"><strong>Click to upload</strong> a BOM CSV · Parts will be pre-loaded into the quote</div>
+        </div>
+        <div id="q-csv-chip" style="display:none"></div>
+        <div id="q-csv-status" style="display:none"></div>
+        <div style="display:flex;gap:10px;margin-top:10px">
+          <button class="btn btn-primary" id="q-load-csv-btn" onclick="loadBOMCSV()" disabled style="display:none">📥 Load Parts from CSV</button>
+          <button class="btn btn-secondary" id="q-clear-csv" onclick="clearQCSV()" style="display:none">✕ Remove</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scope -->
+    <div class="panel-full">
+      <div class="panel-header"><span>📋</span><span class="panel-label">Scope Description</span><div id="q-scope-tags" style="margin-left:8px;display:flex;gap:6px"></div></div>
+      <div class="panel-body">
+        <textarea class="request-area" id="q-scope" placeholder="Describe the project scope — or upload a schematic above to auto-fill this field.&#10;&#10;Example: 'Customer needs a simplex motor starter panel for a 25HP blower motor, 460V 3-phase. Panel must include H/O/A selector, remote start/stop, high pressure and vacuum fault protection, enclosure cooling fan with thermostat, and general fault indication. UL508A required.'"></textarea>
+        <div class="action-row">
+          <button class="btn btn-primary" onclick="generateQuote()" id="q-gen-btn" disabled>⚡ Generate Quote</button>
+          <button class="btn btn-secondary" onclick="clearQuoteMode()">✕ Clear All</button>
+          <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text-muted);">CTRL+ENTER</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Output -->
+    <div class="panel-full" id="output-panel">
+      <div class="panel-header"><span>🤖</span><span class="panel-label">AI Quote Output</span><div style="margin-left:auto;display:flex;gap:6px" id="q-output-tags"></div></div>
+      <div id="q-response" class="response-area">
+        <div class="empty-state"><div class="empty-icon">⚡</div><div class="empty-text">Load the database, describe the scope, and hit Generate Quote.</div></div>
+      </div>
+      <div id="q-export-row" style="display:none" class="export-row">
+        <button class="btn btn-success" onclick="copyQuote()">📋 Copy Summary</button>
+        <button class="btn btn-orange" onclick="exportExcel()">📊 Export Excel</button>
+        <button class="btn btn-secondary" onclick="window.print()">🖨️ Print / PDF</button>
+      </div>
+    </div>
+
+  </div><!-- /QUOTE MODE -->
+
+
+  <!-- ═══════════════════ TEACH MODE ═══════════════════ -->
+  <div class="mode-panel" id="panel-teach">
+
+    <div class="panel-full" style="border-color:var(--purple-border)">
+      <div class="panel-header panel-header-purple"><span>🎓</span><span class="panel-label" style="color:var(--purple)">Teach Mode — Upload Past Job Data</span></div>
+      <div class="panel-body">
+        <div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-dim);margin-bottom:16px;line-height:1.7;background:var(--purple-light);border:1px solid var(--purple-border);border-radius:8px;padding:12px;">
+          Upload any combination of files for a past job. The agent reads everything, structures it into a complete job record, and shows a preview before saving to Airtable.
+        </div>
+        <div class="grid-2" style="margin-bottom:0">
+          <div>
+            <div class="field-group">
+              <label class="field-label">Anthropic API Key</label>
+              <input class="field-input" type="password" id="t-anthropic-key" placeholder="sk-ant-api03-••••••••••••••••">
+            </div>
+            <div class="field-group">
+              <label class="field-label">Airtable Personal Access Token</label>
+              <input class="field-input" type="password" id="t-token" placeholder="pat••••••••••••••••">
+            </div>
+            <div class="field-group">
+              <label class="field-label">Base ID (pre-configured)</label>
+              <input class="field-input" type="text" id="t-baseid" value="appfK5n81xyZNbrUk" readonly>
+            </div>
+            <div class="field-group">
+              <label class="field-label">Job Number *</label>
+              <input class="field-input" type="text" id="t-jobnum" placeholder="e.g. 53677">
+            </div>
+            <div class="field-group">
+              <label class="field-label">Customer Name *</label>
+              <input class="field-input" type="text" id="t-customer" placeholder="e.g. Acme Industries">
+            </div>
+            <div class="field-group">
+              <label class="field-label">Outcome</label>
+              <select class="field-input" id="t-outcome">
+                <option value="Won">Won</option>
+                <option value="Lost">Lost</option>
+                <option value="Completed">Completed</option>
+                <option value="Pending">Pending</option>
+              </select>
+            </div>
+            <div class="field-group">
+              <label class="field-label">Final Quote Price ($)</label>
+              <input class="field-input" type="number" id="t-price" placeholder="e.g. 16500">
+            </div>
+          </div>
+          <div>
+            <div style="margin-bottom:12px">
+              <label class="field-label" style="margin-bottom:6px;display:block">Schematic / Drawing</label>
+              <div class="upload-zone purple" id="t-schem-drop" ondragover="doDragOver(event,'t-schem-drop')" ondragleave="doDragLeave('t-schem-drop')" ondrop="doDrop(event,'t-schematic')">
+                <input type="file" id="t-schematic" accept=".pdf,.png,.jpg,.jpeg,.webp" onchange="onFileSelect(event,'t-schematic')">
+                <div class="upload-icon">📐</div>
+                <div class="upload-text"><strong class="purple">Upload schematic</strong> · PDF or image</div>
+              </div>
+              <div id="t-schem-chip" style="display:none"></div>
+            </div>
+            <div style="margin-bottom:12px">
+              <label class="field-label" style="margin-bottom:6px;display:block">BOM / Parts CSV</label>
+              <div class="upload-zone purple" id="t-csv-drop" ondragover="doDragOver(event,'t-csv-drop')" ondragleave="doDragLeave('t-csv-drop')" ondrop="doDrop(event,'t-csv')">
+                <input type="file" id="t-csv" accept=".csv" onchange="onFileSelect(event,'t-csv')">
+                <div class="upload-icon">📋</div>
+                <div class="upload-text"><strong class="purple">Upload BOM CSV</strong> · Parts and costs</div>
+              </div>
+              <div id="t-csv-chip" style="display:none"></div>
+            </div>
+            <div style="margin-bottom:12px">
+              <label class="field-label" style="margin-bottom:6px;display:block">Labor CSV</label>
+              <div class="upload-zone purple" id="t-labor-drop" ondragover="doDragOver(event,'t-labor-drop')" ondragleave="doDragLeave('t-labor-drop')" ondrop="doDrop(event,'t-labor')">
+                <input type="file" id="t-labor" accept=".csv" onchange="onFileSelect(event,'t-labor')">
+                <div class="upload-icon">👷</div>
+                <div class="upload-text"><strong class="purple">Upload Labor CSV</strong> · Hours and rates</div>
+              </div>
+              <div id="t-labor-chip" style="display:none"></div>
+            </div>
+            <div>
+              <label class="field-label" style="margin-bottom:6px;display:block">Additional Notes</label>
+              <textarea class="request-area" id="t-notes" style="min-height:80px" placeholder="Special requirements, lessons learned, why it was won or lost..."></textarea>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:16px;display:flex;gap:10px">
+          <button class="btn btn-purple" onclick="analyzeTeachJob()" id="t-analyze-btn">🔍 Analyze & Preview</button>
+          <button class="btn btn-secondary" onclick="clearTeachMode()">✕ Clear</button>
+        </div>
+        <div id="t-analyze-status"></div>
+      </div>
+    </div>
+
+    <!-- Preview -->
+    <div class="panel-full" id="t-preview-panel" style="display:none;border-color:var(--purple-border)">
+      <div class="panel-header panel-header-purple">
+        <span>👁️</span>
+        <span class="panel-label" style="color:var(--purple)">Preview — Review Before Saving</span>
+        <div style="margin-left:auto;display:flex;gap:6px" id="t-preview-tags"></div>
+      </div>
+      <div id="t-preview-content" class="response-content"></div>
+      <div class="export-row">
+        <button class="btn btn-success" onclick="saveToAirtable()" id="t-save-btn">✅ Save to Airtable Database</button>
+        <button class="btn btn-secondary" onclick="document.getElementById('t-preview-panel').style.display='none'">← Back to Edit</button>
+      </div>
+      <div id="t-save-status" style="padding:0 20px 16px"></div>
+    </div>
+
+  </div><!-- /TEACH MODE -->
+
+</div>
+
+<script>
+// ── Configuration ─────────────────────────────────────────────────────────────
+function getAPIKey() { return document.getElementById('anthropic-key')?.value.trim() || document.getElementById('t-anthropic-key')?.value.trim() || ''; }
+const LOW_CREDIT_THRESHOLD = 5.00;
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let db = {parts:[],laborRates:[],jobTypes:[],jobs:[],quoteLog:[]};
+let dbLoaded = false;
+let selectedJobType = null;
+let lastQuote = null;
+let qSchematic = {file:null,b64:null,mime:null};
+let qCSV = {file:null,text:null,rows:[]};
+let tSchematic = {file:null,b64:null,mime:null};
+let tCSV = {file:null,text:null,rows:[]};
+let tLabor = {file:null,text:null,rows:[]};
+let teachPreviewData = null;
+
+// ── API call wrapper with credit check ────────────────────────────────────────
+async function callAI(messages, maxTokens=4000) {
+  const ANTHROPIC_API_KEY = getAPIKey();
+  console.log('API Key present:', !!ANTHROPIC_API_KEY, 'Length:', ANTHROPIC_API_KEY?.length);
+  if(!ANTHROPIC_API_KEY) {
+    throw new Error('Please enter your Anthropic API key in the connection panel.');
+  }
+  // Use local proxy to avoid CORS issues
+  const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  const apiUrl = isLocal ? '/api/anthropic' : 'https://api.anthropic.com/v1/messages';
+  const headers = {'Content-Type': 'application/json'};
+  const bodyObj = {model:'claude-sonnet-4-20250514', max_tokens:maxTokens, messages};
+  if(isLocal) {
+    bodyObj.apiKey = ANTHROPIC_API_KEY; // proxy reads and removes this
+  } else {
+    headers['x-api-key'] = ANTHROPIC_API_KEY;
+    headers['anthropic-version'] = '2023-06-01';
+    headers['anthropic-dangerous-direct-browser-access'] = 'true';
+  }
+  let res;
+  try {
+    res = await fetch(apiUrl, {method:'POST', headers, body: JSON.stringify(bodyObj)});
+  } catch(networkErr) {
+    throw new Error('Network error — cannot reach API. Check your internet connection. Detail: ' + networkErr.message);
+  }
+  if(!res.ok) {
+    const err = await res.json().catch(()=>({}));
+    // Check for credit/billing errors
+    if(res.status === 402 || err?.error?.type === 'billing_error') {
+      document.getElementById('credit-warning').classList.add('show');
+      throw new Error('Insufficient API credits. Please top up at console.anthropic.com');
+    }
+    const msg = err?.error?.message || `API error: ${res.status} - ${JSON.stringify(err)}`;
+    if(window.location.protocol==='file:') throw new Error(msg + ' — Note: This file must be served from a server, not opened directly. See the yellow warning banner at the top.');
+    throw new Error(msg);
+  }
+  const data = await res.json();
+  // Check usage and warn if credits may be low
+  checkCreditWarning(data);
+  return data;
+}
+
+function checkCreditWarning(responseData) {
+  // Show warning banner proactively if we detect billing issues
+  // The actual credit balance check happens server-side; we surface it on 402 errors
+  // For now we show a persistent reminder that can be dismissed
+}
+
+// ── Mode switch ───────────────────────────────────────────────────────────────
+function setMode(mode) {
+  document.getElementById('panel-quote').classList.toggle('active', mode==='quote');
+  document.getElementById('panel-teach').classList.toggle('active', mode==='teach');
+  document.getElementById('btn-quote').classList.toggle('active', mode==='quote');
+  document.getElementById('btn-teach').classList.toggle('active', mode==='teach');
+  if(mode==='teach') {
+    if(document.getElementById('q-token').value) document.getElementById('t-token').value = document.getElementById('q-token').value;
+    if(document.getElementById('anthropic-key').value) document.getElementById('t-anthropic-key').value = document.getElementById('anthropic-key').value;
+  }
+  if(mode==='quote') {
+    if(document.getElementById('t-token').value) document.getElementById('q-token').value = document.getElementById('t-token').value;
+    if(document.getElementById('t-anthropic-key').value) document.getElementById('anthropic-key').value = document.getElementById('t-anthropic-key').value;
+  }
+}
+
+// ── Airtable ──────────────────────────────────────────────────────────────────
+function getBaseId() { return document.getElementById('q-baseid').value.trim(); }
+
+async function fetchAirtable(token, baseId, tableName) {
+  const records=[];let offset=null;
+  do {
+    const url=`https://api.airtable.com/v0/${baseId}/${encodeURIComponent(tableName)}${offset?`?offset=${offset}`:''}`;
+    const res=await fetch(url,{headers:{Authorization:`Bearer ${token}`}});
+    if(!res.ok) throw new Error(`Failed to fetch ${tableName}: ${res.status}`);
+    const data=await res.json();
+    records.push(...data.records);
+    offset=data.offset;
+  } while(offset);
+  return records;
+}
+
+async function postAirtable(token, baseId, tableName, fields) {
+  const url=`https://api.airtable.com/v0/${baseId}/${encodeURIComponent(tableName)}`;
+  const res=await fetch(url,{method:'POST',headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({fields})});
+  if(!res.ok){const e=await res.json();throw new Error(e.error?.message||`Failed to save to ${tableName}`);}
+  return await res.json();
+}
+
+async function loadDB() {
+  const token=document.getElementById('q-token').value.trim();
+  const baseId=getBaseId();
+  const btn=document.getElementById('q-load-btn');
+  const alertEl=document.getElementById('q-load-alert');
+  if(!token){alertEl.innerHTML='<div class="alert alert-warning">Please enter your Airtable token.</div>';return;}
+  btn.textContent='⟳ Loading...';btn.disabled=true;alertEl.innerHTML='';
+  try {
+    const [parts,labor,jobTypes,jobs,quoteLog]=await Promise.all([
+      fetchAirtable(token,baseId,'Parts Library'),
+      fetchAirtable(token,baseId,'Labor Rates'),
+      fetchAirtable(token,baseId,'Job Types'),
+      fetchAirtable(token,baseId,'Jobs'),
+      fetchAirtable(token,baseId,'Quote Log'),
+    ]);
+    db.parts=parts.map(r=>r.fields);
+    db.laborRates=labor.map(r=>r.fields);
+    db.jobTypes=jobTypes.map(r=>r.fields);
+    db.jobs=jobs.map(r=>r.fields);
+    db.quoteLog=quoteLog.map(r=>r.fields);
+    document.getElementById('q-stat-parts').textContent=db.parts.length;
+    document.getElementById('q-stat-jobs').textContent=db.jobs.length;
+    document.getElementById('q-stat-types').textContent=db.jobTypes.length;
+    document.getElementById('q-stat-quotes').textContent=db.quoteLog.length;
+    document.getElementById('q-stats').style.display='flex';
+    alertEl.innerHTML='<div class="alert alert-success">✓ Database loaded</div>';
+    btn.textContent='✓ Reload';btn.disabled=false;
+    dbLoaded=true;
+    renderJobTypes();
+    document.getElementById('q-gen-btn').disabled=false;
+    document.getElementById('t-token').value=token;
+  } catch(e) {
+    alertEl.innerHTML=`<div class="alert alert-error">✗ ${e.message}</div>`;
+    btn.textContent='⚡ Load Database';btn.disabled=false;
+  }
+}
+
+function renderJobTypes() {
+  const c=document.getElementById('q-jobtypes');
+  if(!db.jobTypes.length){c.innerHTML='<div style="color:var(--text-muted);font-size:12px;font-family:DM Mono,monospace;">No job types found</div>';return;}
+  c.innerHTML='<div class="job-types-grid">'+db.jobTypes.map((jt,i)=>`
+    <div class="job-type-card" onclick="selectJT(${i})" id="jt-${i}">
+      <div class="job-type-name">${jt['Job Type Name']||'Unknown'}</div>
+      <div class="job-type-meta">${jt['Typical HP Range']||''} · ${jt['Enclosure Size']||''}</div>
+    </div>`).join('')+'</div>';
+}
+
+function selectJT(i) {
+  selectedJobType=db.jobTypes[i];
+  document.querySelectorAll('.job-type-card').forEach(c=>c.classList.remove('selected'));
+  document.getElementById(`jt-${i}`)?.classList.add('selected');
+}
+
+// ── File handling ─────────────────────────────────────────────────────────────
+function doDragOver(e,zoneId){e.preventDefault();document.getElementById(zoneId).classList.add('dragover');}
+function doDragLeave(zoneId){document.getElementById(zoneId).classList.remove('dragover');}
+function doDrop(e,inputId){e.preventDefault();e.currentTarget.classList.remove('dragover');const f=e.dataTransfer.files[0];if(f)processFile(f,inputId);}
+function onFileSelect(e,inputId){const f=e.target.files[0];if(f)processFile(f,inputId);}
+
+function processFile(file,inputId) {
+  const sizeStr=file.size>1024*1024?`${(file.size/1024/1024).toFixed(1)} MB`:`${(file.size/1024).toFixed(0)} KB`;
+  if(inputId==='q-schematic'){
+    qSchematic.file=file;
+    showFileChip('q-schematic-chip',file.name,sizeStr,()=>clearQSchematic());
+    document.getElementById('q-extract-btn').style.display='flex';
+    document.getElementById('q-clear-schematic').style.display='flex';
+    document.getElementById('q-extract-btn').disabled=false;
+    readFileB64(file,data=>{qSchematic.b64=data.split(',')[1];qSchematic.mime=getMime(file);});
+  } else if(inputId==='q-csv'){
+    qCSV.file=file;
+    showFileChip('q-csv-chip',file.name,sizeStr,()=>clearQCSV());
+    document.getElementById('q-load-csv-btn').style.display='flex';
+    document.getElementById('q-clear-csv').style.display='flex';
+    document.getElementById('q-load-csv-btn').disabled=false;
+    readFileText(file,text=>{qCSV.text=text;qCSV.rows=parseCSV(text);});
+  } else if(inputId==='t-schematic'){
+    tSchematic.file=file;
+    showFileChip('t-schem-chip',file.name,sizeStr,()=>clearTFile('t-schematic'));
+    readFileB64(file,data=>{tSchematic.b64=data.split(',')[1];tSchematic.mime=getMime(file);});
+  } else if(inputId==='t-csv'){
+    tCSV.file=file;
+    showFileChip('t-csv-chip',file.name,sizeStr,()=>clearTFile('t-csv'));
+    readFileText(file,text=>{tCSV.text=text;tCSV.rows=parseCSV(text);});
+  } else if(inputId==='t-labor'){
+    tLabor.file=file;
+    showFileChip('t-labor-chip',file.name,sizeStr,()=>clearTFile('t-labor'));
+    readFileText(file,text=>{tLabor.text=text;tLabor.rows=parseCSV(text);});
+  }
+}
+
+function showFileChip(elId,name,size,onRemove) {
+  const el=document.getElementById(elId);
+  el.style.display='flex';
+  el.className='file-chip';
+  el.innerHTML=`<div><div class="file-name">📄 ${name}</div><div class="file-size">${size}</div></div><span class="file-remove">✕</span>`;
+  el.querySelector('.file-remove').addEventListener('click',onRemove);
+}
+
+function getMime(file) {
+  if(file.type==='application/pdf') return 'application/pdf';
+  if(file.type==='image/png') return 'image/png';
+  if(file.type==='image/webp') return 'image/webp';
+  return 'image/jpeg';
+}
+
+function readFileB64(file,cb){const r=new FileReader();r.onload=e=>cb(e.target.result);r.readAsDataURL(file);}
+function readFileText(file,cb){const r=new FileReader();r.onload=e=>cb(e.target.result);r.readAsText(file);}
+
+function parseCSV(text) {
+  const lines=text.trim().split('\n');
+  const headers=lines[0].split(',').map(h=>h.trim().replace(/^"|"$/g,''));
+  return lines.slice(1).map(line=>{
+    const vals=line.split(',').map(v=>v.trim().replace(/^"|"$/g,''));
+    const obj={};headers.forEach((h,i)=>obj[h]=vals[i]||'');
+    return obj;
+  }).filter(r=>Object.values(r).some(v=>v));
+}
+
+function clearQSchematic(){qSchematic={file:null,b64:null,mime:null};document.getElementById('q-schematic-chip').style.display='none';document.getElementById('q-extract-btn').style.display='none';document.getElementById('q-clear-schematic').style.display='none';document.getElementById('q-extract-status').style.display='none';document.getElementById('q-schematic').value='';document.getElementById('q-scope').classList.remove('prefilled');document.getElementById('q-scope-tags').innerHTML='';}
+function clearQCSV(){qCSV={file:null,text:null,rows:[]};document.getElementById('q-csv-chip').style.display='none';document.getElementById('q-load-csv-btn').style.display='none';document.getElementById('q-clear-csv').style.display='none';document.getElementById('q-csv-status').style.display='none';document.getElementById('q-csv').value='';}
+function clearTFile(inputId){
+  if(inputId==='t-schematic'){tSchematic={file:null,b64:null,mime:null};document.getElementById('t-schem-chip').style.display='none';document.getElementById('t-schematic').value='';}
+  else if(inputId==='t-csv'){tCSV={file:null,text:null,rows:[]};document.getElementById('t-csv-chip').style.display='none';document.getElementById('t-csv').value='';}
+  else if(inputId==='t-labor'){tLabor={file:null,text:null,rows:[]};document.getElementById('t-labor-chip').style.display='none';document.getElementById('t-labor').value='';}
+}
+
+// ── Quote Mode: extract scope ─────────────────────────────────────────────────
+async function extractScope() {
+  if(!qSchematic.b64) return;
+  const statusEl=document.getElementById('q-extract-status');
+  const btn=document.getElementById('q-extract-btn');
+  statusEl.style.display='block';statusEl.className='alert alert-info';
+  statusEl.textContent='⟳ Reading schematic — extracting components and scope...';
+  btn.disabled=true;
+  const prompt=`You are an expert electrical controls engineer. Analyze this schematic and extract a detailed scope description for quoting.\n\nExtract: panel type, power specs (voltage/phase/Hz/HP), main power components with ratings, motor control components, control power, relay logic, pilot devices, protection features, remote I/O, enclosure size and rating, terminal blocks. Write as plain English scope description for an estimator. Be specific about quantities and ratings.`;
+  try {
+    const content=[{type:qSchematic.mime==='application/pdf'?'document':'image',source:{type:'base64',media_type:qSchematic.mime,data:qSchematic.b64}},{type:'text',text:prompt}];
+    const data=await callAI([{role:'user',content}],2000);
+    const extracted=data.content?.[0]?.text||'';
+    if(!extracted) throw new Error('No content extracted');
+    const ta=document.getElementById('q-scope');
+    const existing=ta.value.trim();
+    ta.value=existing?`--- FROM SCHEMATIC ---\n${extracted}\n\n--- ADDITIONAL NOTES ---\n${existing}`:extracted;
+    ta.classList.add('prefilled');
+    document.getElementById('q-scope-tags').innerHTML='<span class="tag tag-purple">✓ FROM SCHEMATIC</span>';
+    statusEl.className='alert alert-success';
+    statusEl.textContent='✓ Scope extracted — review and edit below before generating quote';
+    btn.textContent='🔄 Re-read Schematic';
+  } catch(e) {
+    statusEl.className='alert alert-error';
+    statusEl.textContent=`✗ ${e.message}`;
+  }
+  btn.disabled=false;
+}
+
+// ── Quote Mode: load BOM CSV ──────────────────────────────────────────────────
+function loadBOMCSV() {
+  if(!qCSV.rows.length) return;
+  const statusEl=document.getElementById('q-csv-status');
+  statusEl.style.display='block';
+  const lines=qCSV.rows.map(r=>{
+    const sku=r['Part Number / SKU']||r['SKU']||r['Part Number']||'';
+    const desc=r['Description']||'';
+    const qty=r['Qty']||r['Quantity']||r['Typical Qty']||'1';
+    const cost=r['Unit Cost ($)']||r['Unit Cost']||'';
+    return `${sku} | ${desc} | Qty: ${qty}${cost?` | Unit Cost: $${cost}`:''}`;
+  }).filter(l=>l.replace(/\|/g,'').trim());
+  const summary=`--- FROM BOM CSV (${qCSV.rows.length} parts) ---\n${lines.join('\n')}`;
+  const ta=document.getElementById('q-scope');
+  const existing=ta.value.trim();
+  ta.value=existing?`${existing}\n\n${summary}`:summary;
+  ta.classList.add('prefilled');
+  document.getElementById('q-scope-tags').innerHTML+='<span class="tag tag-blue">+ BOM CSV</span>';
+  statusEl.className='alert alert-success';
+  statusEl.textContent=`✓ ${qCSV.rows.length} parts loaded from CSV`;
+}
+
+// ── Quote Mode: generate quote ────────────────────────────────────────────────
+async function generateQuote() {
+  const request=document.getElementById('q-scope').value.trim();
+  if(!request) return;
+  const responseArea=document.getElementById('q-response');
+  responseArea.innerHTML=`<div class="thinking"><div class="dots"><span></span><span></span><span></span></div>Analyzing scope and matching parts from your database...</div>`;
+  document.getElementById('q-export-row').style.display='none';
+  document.getElementById('q-output-tags').innerHTML='';
+  document.getElementById('q-gen-btn').disabled=true;
+
+  const partsCtx=db.parts.map(p=>`SKU:${p['Part Number / SKU']}|${p['Description']}|Cat:${p['Category']}|Supplier:${p['Supplier']}|Cost:$${p['Unit Cost ($)']}`).join('\n');
+  const laborCtx=db.laborRates.map(l=>`${l['Labor Type']}|$${l['Hourly Rate ($)']}/hr`).join('\n');
+  const pastCtx=db.quoteLog.slice(-5).map(q=>`Job ${q['Job Number']}|${q['Customer Name']}|Mat:$${q['Total Materials ($)']}|Labor:$${q['Total Labor ($)']}|Total:$${q['Total Quote ($)']}|${q['Status']}`).join('\n');
+  const jtCtx=selectedJobType?`Template:${selectedJobType['Job Type Name']}|HP:${selectedJobType['Typical HP Range']}|Enc:${selectedJobType['Enclosure Size']}|EngHrs:${selectedJobType['Typical Eng Hours']}|ShopHrs:${selectedJobType['Typical Shop Hours']}`:'No template selected';
+
+  const prompt=`You are an expert electrical controls estimator for ESD. Generate a detailed quote.\n\nPARTS DATABASE (${db.parts.length} parts):\n${partsCtx}\n\nLABOR RATES:\n${laborCtx}\n\nJOB TYPE TEMPLATE:\n${jtCtx}\n\nPAST QUOTES:\n${pastCtx||'None yet'}\n\nSCOPE:\n${request}\n\nRespond ONLY with valid JSON (no markdown):\n{"scope_summary":"2-3 sentence summary","job_type":"type","panels":1,"materials":[{"sku":"SKU","description":"desc","category":"cat","qty":1,"unit_cost":0.00,"extended_cost":0.00,"reason":"why"}],"labor":[{"type":"type","hours":0,"rate":0.00,"cost":0.00}],"materials_total":0.00,"labor_total":0.00,"direct_cost":0.00,"notes":"notes","confidence":"high/medium/low","confidence_reason":"reason"}\n\nOnly use SKUs from the Parts Database. Note missing parts in notes.`;
+
+  try {
+    const data=await callAI([{role:'user',content:prompt}],4000);
+    const raw=data.content?.[0]?.text||'';
+    let q;
+    try{q=JSON.parse(raw.replace(/```json|```/g,'').trim());}
+    catch(e){throw new Error('Could not parse response. Try again.');}
+    lastQuote=q;
+    renderQuote(q);
+  } catch(e) {
+    responseArea.innerHTML=`<div class="response-content"><div class="alert alert-error">✗ ${e.message}</div></div>`;
+  }
+  document.getElementById('q-gen-btn').disabled=false;
+}
+
+// ── Render quote ──────────────────────────────────────────────────────────────
+function renderQuote(q) {
+  const confColor=q.confidence==='high'?'tag-green':q.confidence==='medium'?'tag-orange':'tag-blue';
+  const schemTag=qSchematic.file?'<span class="tag tag-purple">FROM SCHEMATIC</span>':'';
+  const csvTag=qCSV.file?'<span class="tag tag-blue">+ BOM CSV</span>':'';
+  document.getElementById('q-output-tags').innerHTML=`${schemTag}${csvTag}<span class="tag ${confColor}">${q.confidence?.toUpperCase()} CONFIDENCE</span><span class="tag tag-blue">${q.panels||1} PANEL(S)</span>`;
+
+  const partsRows=(q.materials||[]).map(p=>`<tr><td><span class="sku">${p.sku}</span></td><td style="max-width:200px">${p.description}</td><td><span class="cat-badge">${p.category}</span></td><td class="mono" style="text-align:center">${p.qty}</td><td class="cost-green">$${Number(p.unit_cost).toFixed(2)}</td><td class="cost-green">$${Number(p.extended_cost).toFixed(2)}</td></tr>`).join('');
+  const laborRows=(q.labor||[]).map(l=>`<tr><td>${l.type}</td><td class="mono" style="text-align:center">${l.hours} hrs</td><td class="cost-orange">$${Number(l.rate).toFixed(2)}/hr</td><td class="cost-orange">$${Number(l.cost).toFixed(2)}</td></tr>`).join('');
+  const dc=Number(q.direct_cost);
+
+  document.getElementById('q-response').innerHTML=`<div class="response-content">
+    <div class="q-section"><div class="q-title">📋 Scope Summary</div><div style="font-size:14px;line-height:1.7">${q.scope_summary}</div><div style="margin-top:10px"><span class="tag tag-blue">${q.job_type}</span></div></div>
+    <div class="q-section"><div class="q-title">🔩 Materials — ${(q.materials||[]).length} items</div><div class="table-wrap"><table class="data-table"><thead><tr><th>SKU</th><th>Description</th><th>Category</th><th style="text-align:center">Qty</th><th style="text-align:right">Unit $</th><th style="text-align:right">Extended $</th></tr></thead><tbody>${partsRows}</tbody></table></div></div>
+    <div class="q-section"><div class="q-title">👷 Labor</div><div class="table-wrap"><table class="data-table"><thead><tr><th>Type</th><th style="text-align:center">Hours</th><th style="text-align:right">Rate</th><th style="text-align:right">Cost</th></tr></thead><tbody>${laborRows}</tbody></table></div></div>
+    <div class="q-section"><div class="q-title">💰 Pricing Summary</div><div class="pricing-grid">
+      <div class="pricing-row"><span class="plabel">Materials Subtotal</span><span class="pval">$${Number(q.materials_total).toFixed(2)}</span></div>
+      <div class="pricing-row"><span class="plabel">Labor Subtotal</span><span class="pval">$${Number(q.labor_total).toFixed(2)}</span></div>
+      <div class="pricing-row"><span class="plabel">Direct Cost Total</span><span class="pval">$${dc.toFixed(2)}</span></div>
+      <div class="pricing-input-row"><span class="plabel">Overhead %</span><div style="display:flex;align-items:center;gap:6px"><input class="pct-input" type="number" id="oh-pct" value="10" min="0" max="100" onchange="recalc(${dc})"><span style="color:var(--text-dim);font-size:12px">%</span></div></div>
+      <div class="pricing-row"><span class="plabel">Overhead Amount</span><span class="pval" id="oh-amt">$${(dc*.1).toFixed(2)}</span></div>
+      <div class="pricing-input-row"><span class="plabel">Profit Margin %</span><div style="display:flex;align-items:center;gap:6px"><input class="pct-input" type="number" id="mg-pct" value="20" min="0" max="100" onchange="recalc(${dc})"><span style="color:var(--text-dim);font-size:12px">%</span></div></div>
+      <div class="pricing-row"><span class="plabel">Margin Amount</span><span class="pval" id="mg-amt">$${(dc*1.1*.2).toFixed(2)}</span></div>
+      <div class="pricing-row total"><span>TOTAL QUOTE PRICE</span><span class="pval" id="tot-amt">$${(dc*1.1*1.2).toFixed(2)}</span></div>
+    </div></div>
+    ${q.notes?`<div class="q-section"><div class="q-title">📝 Notes & Assumptions</div><div class="notes-box">${q.notes}</div></div>`:''}
+    ${q.confidence_reason?`<div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-muted);padding:4px 0">Confidence: ${q.confidence_reason}</div>`:''}
+  </div>`;
+  document.getElementById('q-export-row').style.display='flex';
+}
+
+function recalc(dc) {
+  const oh=parseFloat(document.getElementById('oh-pct').value)/100||0;
+  const mg=parseFloat(document.getElementById('mg-pct').value)/100||0;
+  const wo=dc*(1+oh);
+  document.getElementById('oh-amt').textContent=`$${(dc*oh).toFixed(2)}`;
+  document.getElementById('mg-amt').textContent=`$${(wo*mg).toFixed(2)}`;
+  document.getElementById('tot-amt').textContent=`$${(wo*(1+mg)).toFixed(2)}`;
+}
+
+// ── Excel export ──────────────────────────────────────────────────────────────
+function exportExcel() {
+  if(!lastQuote) return;
+  const jobNum=document.getElementById('q-jobnum').value||'TBD';
+  const customer=document.getElementById('q-customer').value||'TBD';
+  const oh=parseFloat(document.getElementById('oh-pct')?.value)/100||0.10;
+  const mg=parseFloat(document.getElementById('mg-pct')?.value)/100||0.20;
+  const dc=Number(lastQuote.direct_cost);
+  const wo=dc*(1+oh);
+  const total=wo*(1+mg);
+
+  const wb=XLSX.utils.book_new();
+
+  // Sheet 1: Materials
+  const matHeaders=['Part Number / SKU','Description','Category','Qty','Unit Cost ($)','Extended Cost ($)','Reason'];
+  const matRows=(lastQuote.materials||[]).map(p=>[p.sku,p.description,p.category,p.qty,Number(p.unit_cost),Number(p.extended_cost),p.reason||'']);
+  const matWS=XLSX.utils.aoa_to_sheet([matHeaders,...matRows]);
+  matWS['!cols']=[{wch:20},{wch:35},{wch:20},{wch:6},{wch:14},{wch:16},{wch:30}];
+  XLSX.utils.book_append_sheet(wb,matWS,'Materials');
+
+  // Sheet 2: Labor
+  const labHeaders=['Labor Type','Hours','Rate ($/hr)','Cost ($)'];
+  const labRows=(lastQuote.labor||[]).map(l=>[l.type,l.hours,Number(l.rate),Number(l.cost)]);
+  const labWS=XLSX.utils.aoa_to_sheet([labHeaders,...labRows]);
+  labWS['!cols']=[{wch:28},{wch:8},{wch:14},{wch:14}];
+  XLSX.utils.book_append_sheet(wb,labWS,'Labor');
+
+  // Sheet 3: Pricing Summary
+  const sumData=[
+    ['ESD QUOTING AGENT — QUOTE SUMMARY',''],
+    ['',''],
+    ['Job Number',jobNum],
+    ['Customer',customer],
+    ['Date',new Date().toLocaleDateString()],
+    ['Job Type',lastQuote.job_type||''],
+    ['Panels',lastQuote.panels||1],
+    ['',''],
+    ['PRICING',''],
+    ['Materials Subtotal',Number(lastQuote.materials_total)],
+    ['Labor Subtotal',Number(lastQuote.labor_total)],
+    ['Direct Cost Total',dc],
+    [`Overhead (${Math.round(oh*100)}%)`,dc*oh],
+    [`Margin (${Math.round(mg*100)}%)`,wo*mg],
+    ['TOTAL QUOTE PRICE',total],
+    ['',''],
+    ['SCOPE SUMMARY',''],
+    [lastQuote.scope_summary||'',''],
+    ['',''],
+    ['NOTES',''],
+    [lastQuote.notes||'',''],
+  ];
+  const sumWS=XLSX.utils.aoa_to_sheet(sumData);
+  sumWS['!cols']=[{wch:28},{wch:40}];
+  XLSX.utils.book_append_sheet(wb,sumWS,'Quote Summary');
+
+  XLSX.writeFile(wb,`ESD_Quote_${jobNum}_${customer.replace(/\s+/g,'_')}.xlsx`);
+}
+
+// ── Copy quote ────────────────────────────────────────────────────────────────
+function copyQuote() {
+  if(!lastQuote) return;
+  const oh=parseFloat(document.getElementById('oh-pct')?.value)/100||.1;
+  const mg=parseFloat(document.getElementById('mg-pct')?.value)/100||.2;
+  const total=lastQuote.direct_cost*(1+oh)*(1+mg);
+  const text=`ESD QUOTING AGENT\nJob: ${document.getElementById('q-jobnum').value||'TBD'} | Customer: ${document.getElementById('q-customer').value||'TBD'}\n${new Date().toLocaleDateString()}\n${'─'.repeat(50)}\n${lastQuote.scope_summary}\n\nMATERIALS: $${Number(lastQuote.materials_total).toFixed(2)}\nLABOR: $${Number(lastQuote.labor_total).toFixed(2)}\nDIRECT COST: $${Number(lastQuote.direct_cost).toFixed(2)}\nOVERHEAD (${Math.round(oh*100)}%): $${(lastQuote.direct_cost*oh).toFixed(2)}\nMARGIN (${Math.round(mg*100)}%): $${(lastQuote.direct_cost*(1+oh)*mg).toFixed(2)}\n${'─'.repeat(50)}\nTOTAL: $${total.toFixed(2)}\n\nNOTES: ${lastQuote.notes||'None'}`;
+  navigator.clipboard.writeText(text).then(()=>{const b=event.target;b.textContent='✓ Copied!';setTimeout(()=>b.textContent='📋 Copy Summary',2000);});
+}
+
+function clearQuoteMode() {
+  document.getElementById('q-scope').value='';
+  document.getElementById('q-scope').classList.remove('prefilled');
+  document.getElementById('q-scope-tags').innerHTML='';
+  document.getElementById('q-response').innerHTML='<div class="empty-state"><div class="empty-icon">⚡</div><div class="empty-text">Load the database, describe the scope, and hit Generate Quote.</div></div>';
+  document.getElementById('q-export-row').style.display='none';
+  document.getElementById('q-output-tags').innerHTML='';
+  lastQuote=null;
+  clearQSchematic();clearQCSV();
+}
+
+// ── Teach Mode ────────────────────────────────────────────────────────────────
+async function analyzeTeachJob() {
+  const jobNum=document.getElementById('t-jobnum').value.trim();
+  const customer=document.getElementById('t-customer').value.trim();
+  if(!jobNum||!customer){document.getElementById('t-analyze-status').innerHTML='<div class="alert alert-warning">Please enter Job Number and Customer Name.</div>';return;}
+  const hasSchematic=!!tSchematic.b64;
+  const hasCSV=!!tCSV.rows.length;
+  const hasLabor=!!tLabor.rows.length;
+  const hasNotes=!!document.getElementById('t-notes').value.trim();
+  if(!hasSchematic&&!hasCSV&&!hasLabor&&!hasNotes){document.getElementById('t-analyze-status').innerHTML='<div class="alert alert-warning">Please upload at least one file or add notes.</div>';return;}
+
+  const statusEl=document.getElementById('t-analyze-status');
+  const btn=document.getElementById('t-analyze-btn');
+  statusEl.innerHTML='<div class="alert alert-purple">⟳ Analyzing uploaded data — extracting full job record...</div>';
+  btn.disabled=true;
+
+  const msgContent=[];
+  if(hasSchematic) msgContent.push({type:tSchematic.mime==='application/pdf'?'document':'image',source:{type:'base64',media_type:tSchematic.mime,data:tSchematic.b64}});
+
+  let textPrompt=`You are an expert electrical controls engineer. Analyze data for job ${jobNum} (Customer: ${customer}) and extract a complete structured job record.\n\n`;
+  if(hasCSV){const s=tCSV.rows.map(r=>Object.keys(r).map(k=>`${k}: ${r[k]}`).join(' | ')).join('\n');textPrompt+=`BOM/PARTS CSV:\n${s}\n\n`;}
+  if(hasLabor){const s=tLabor.rows.map(r=>`${r['Labor Type']||r['Type']||''} | Hours: ${r['Hours']||r['Labor Hours']||0} | Rate: $${r['Rate ($/hr)']||r['Labor Rate ($/hr)']||0}/hr`).join('\n');textPrompt+=`LABOR CSV:\n${s}\n\n`;}
+  if(hasNotes) textPrompt+=`NOTES:\n${document.getElementById('t-notes').value.trim()}\n\n`;
+
+  textPrompt+=`Return ONLY valid JSON:\n{"job_type":"type","scope_description":"detailed description","enclosure_size":"dims","motor_hp":0,"voltage":0,"phase":3,"materials":[{"sku":"SKU","description":"desc","category":"cat","qty":1,"unit_cost":0.00}],"labor":[{"type":"Engineering - Manual","hours":0,"rate":95},{"type":"Engineering - Drawings","hours":0,"rate":95},{"type":"Shop - Enclosure Build","hours":0,"rate":80},{"type":"Shop - QC Testing","hours":0,"rate":80}],"materials_total":0.00,"labor_total":0.00,"direct_cost":0.00,"key_features":["f1","f2"],"lessons_learned":"notes"}`;
+
+  msgContent.push({type:'text',text:textPrompt});
+
+  try {
+    const data=await callAI([{role:'user',content:msgContent}],4000);
+    const raw=data.content?.[0]?.text||'';
+    let parsed;
+    try{parsed=JSON.parse(raw.replace(/```json|```/g,'').trim());}
+    catch(e){throw new Error('Could not parse analysis. Try again.');}
+    teachPreviewData={...parsed,jobNum,customer,outcome:document.getElementById('t-outcome').value,finalPrice:document.getElementById('t-price').value};
+    renderTeachPreview(teachPreviewData);
+    statusEl.innerHTML='<div class="alert alert-success">✓ Analysis complete — review preview below</div>';
+  } catch(e) {
+    statusEl.innerHTML=`<div class="alert alert-error">✗ ${e.message}</div>`;
+  }
+  btn.disabled=false;
+}
+
+function renderTeachPreview(d) {
+  const partsRows=(d.materials||[]).map(p=>`<tr><td><span class="sku">${p.sku}</span></td><td>${p.description}</td><td><span class="cat-badge">${p.category}</span></td><td class="mono" style="text-align:center">${p.qty}</td><td class="cost-green">$${Number(p.unit_cost).toFixed(2)}</td></tr>`).join('');
+  const laborRows=(d.labor||[]).map(l=>`<tr><td>${l.type}</td><td class="mono" style="text-align:center">${l.hours} hrs</td><td class="cost-orange">$${Number(l.rate).toFixed(2)}/hr</td><td class="cost-orange">$${(l.hours*l.rate).toFixed(2)}</td></tr>`).join('');
+  document.getElementById('t-preview-tags').innerHTML=`<span class="tag tag-purple">${d.outcome}</span><span class="tag tag-blue">${d.job_type}</span>${d.finalPrice?`<span class="tag tag-green">$${Number(d.finalPrice).toLocaleString()}</span>`:''}`;
+  document.getElementById('t-preview-content').innerHTML=`
+    <div class="preview-section">
+      <div class="preview-title">📋 Job Summary</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+        <div><div class="field-label">Job Number</div><div class="mono" style="font-size:14px;margin-top:4px">${d.jobNum}</div></div>
+        <div><div class="field-label">Customer</div><div class="mono" style="font-size:14px;margin-top:4px">${d.customer}</div></div>
+        <div><div class="field-label">Job Type</div><input class="editable-field" id="tp-jobtype" value="${d.job_type||''}"></div>
+        <div><div class="field-label">Outcome</div><div style="margin-top:4px"><span class="tag tag-purple">${d.outcome}</span></div></div>
+        <div><div class="field-label">Motor HP</div><input class="editable-field" id="tp-hp" type="number" value="${d.motor_hp||0}"></div>
+        <div><div class="field-label">Voltage</div><input class="editable-field" id="tp-voltage" type="number" value="${d.voltage||460}"></div>
+      </div>
+      <div class="field-label" style="margin-bottom:6px">Scope Description</div>
+      <textarea class="editable-field" id="tp-scope" style="width:100%;min-height:100px;resize:vertical">${d.scope_description||''}</textarea>
+    </div>
+    <div class="preview-section">
+      <div class="preview-title">🔩 Materials — ${(d.materials||[]).length} parts</div>
+      <div class="table-wrap"><table class="data-table"><thead><tr><th>SKU</th><th>Description</th><th>Category</th><th style="text-align:center">Qty</th><th style="text-align:right">Unit Cost</th></tr></thead><tbody>${partsRows}</tbody></table></div>
+      <div style="text-align:right;font-family:'DM Mono',monospace;font-size:13px;color:var(--accent3);margin-top:8px;font-weight:500">Materials Total: $${Number(d.materials_total).toFixed(2)}</div>
+    </div>
+    <div class="preview-section">
+      <div class="preview-title">👷 Labor</div>
+      <div class="table-wrap"><table class="data-table"><thead><tr><th>Type</th><th style="text-align:center">Hours</th><th style="text-align:right">Rate</th><th style="text-align:right">Cost</th></tr></thead><tbody>${laborRows}</tbody></table></div>
+      <div style="text-align:right;font-family:'DM Mono',monospace;font-size:13px;color:var(--accent2);margin-top:8px;font-weight:500">Labor Total: $${Number(d.labor_total).toFixed(2)}</div>
+    </div>
+    ${d.key_features?.length?`<div class="preview-section"><div class="preview-title">⭐ Key Features</div><div style="display:flex;flex-wrap:wrap;gap:6px">${d.key_features.map(f=>`<span class="tag tag-blue">${f}</span>`).join('')}</div></div>`:''}
+    ${d.lessons_learned?`<div class="preview-section"><div class="preview-title">📝 Lessons Learned</div><div class="notes-box">${d.lessons_learned}</div></div>`:''}
+    <div class="preview-section">
+      <div class="preview-title">💰 Financial Summary</div>
+      <div class="pricing-grid">
+        <div class="pricing-row"><span class="plabel">Direct Cost</span><span class="pval">$${Number(d.direct_cost).toFixed(2)}</span></div>
+        ${d.finalPrice?`<div class="pricing-row total"><span>Final Quote Price</span><span class="pval">$${Number(d.finalPrice).toLocaleString()}</span></div>`:''}
+      </div>
+    </div>`;
+  document.getElementById('t-preview-panel').style.display='block';
+  document.getElementById('t-preview-panel').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+async function saveToAirtable() {
+  const token=document.getElementById('t-token').value.trim();
+  const baseId=getBaseId();
+  if(!token){document.getElementById('t-save-status').innerHTML='<div class="alert alert-warning">Please enter your Airtable token.</div>';return;}
+  const d=teachPreviewData;if(!d) return;
+  d.job_type=document.getElementById('tp-jobtype')?.value||d.job_type;
+  d.scope_description=document.getElementById('tp-scope')?.value||d.scope_description;
+  d.motor_hp=parseFloat(document.getElementById('tp-hp')?.value)||d.motor_hp;
+  d.voltage=parseFloat(document.getElementById('tp-voltage')?.value)||d.voltage;
+  const btn=document.getElementById('t-save-btn');
+  const statusEl=document.getElementById('t-save-status');
+  btn.disabled=true;btn.textContent='⟳ Saving...';
+  statusEl.innerHTML='<div class="alert alert-purple">⟳ Writing to Airtable...</div>';
+  try {
+    let saved=[];
+    let newParts=0;
+    for(const p of (d.materials||[])){
+      if(!p.sku||p.sku==='N/A'||p.sku.includes('?')) continue;
+      try{await postAirtable(token,baseId,'Parts Library',{'Part Number / SKU':p.sku,'Description':p.description,'Category':p.category,'Unit Cost ($)':Number(p.unit_cost)||0});newParts++;}
+      catch(e){}
+    }
+    if(newParts) saved.push(`${newParts} parts added to Parts Library`);
+    try{await postAirtable(token,baseId,'Jobs',{'Job Number':d.jobNum,'Customer Name':d.customer,'Description':d.scope_description,'Job Type':d.job_type,'Status':d.outcome,'Date Received':new Date().toISOString().split('T')[0],'Notes':d.lessons_learned||''});saved.push('Job record saved');}
+    catch(e){saved.push(`Job: ${e.message}`);}
+    try{
+      const dc=Number(d.direct_cost)||0;const finalPrice=Number(d.finalPrice)||0;
+      await postAirtable(token,baseId,'Quote Log',{'Quote Number':`QT-${d.jobNum}`,'Job Number':d.jobNum,'Customer Name':d.customer,'Date Quoted':new Date().toISOString().split('T')[0],'Total Materials ($)':Number(d.materials_total)||0,'Total Labor ($)':Number(d.labor_total)||0,'Overhead %':10,'Overhead ($)':dc*0.1,'Margin %':20,'Margin ($)':dc*1.1*0.2,'Total Quote ($)':finalPrice||dc*1.1*1.2,'Tax %':0,'Tax ($)':0,'Total With Tax ($)':finalPrice||dc*1.1*1.2,'Status':d.outcome,'Notes':d.scope_description?.substring(0,200)||''});
+      saved.push('Quote Log entry saved');
+    }catch(e){saved.push(`Quote Log: ${e.message}`);}
+    statusEl.innerHTML=`<div class="alert alert-success">✅ Saved:<br>${saved.map(s=>`• ${s}`).join('<br>')}</div>`;
+    btn.textContent='✅ Saved!';
+    setTimeout(()=>{btn.textContent='✅ Save to Airtable Database';btn.disabled=false;},3000);
+  } catch(e) {
+    statusEl.innerHTML=`<div class="alert alert-error">✗ ${e.message}</div>`;
+    btn.textContent='✅ Save to Airtable Database';btn.disabled=false;
+  }
+}
+
+function clearTeachMode() {
+  document.getElementById('t-jobnum').value='';
+  document.getElementById('t-customer').value='';
+  document.getElementById('t-price').value='';
+  document.getElementById('t-notes').value='';
+  document.getElementById('t-outcome').value='Won';
+  document.getElementById('t-analyze-status').innerHTML='';
+  document.getElementById('t-preview-panel').style.display='none';
+  document.getElementById('t-save-status').innerHTML='';
+  clearTFile('t-schematic');clearTFile('t-csv');clearTFile('t-labor');
+  teachPreviewData=null;
+}
+
+document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='Enter')generateQuote();});
+
+// Detect file:// protocol and show warning
+(function detectCORS() {
+  if(window.location.protocol === 'file:') {
+    document.getElementById('cors-warning').style.display = 'block';
+  }
+})();
+</script>
+</body>
+</html>
