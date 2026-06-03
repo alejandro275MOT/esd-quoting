@@ -896,36 +896,57 @@ async function analyzeTeachJob() {
   var btn=document.getElementById('t-analyze-btn');
   btn.disabled=true;
   try {
+
+    // Step 1: Extract scope from schematic if provided
     var schematicScope='';
     if(hasSchematic){
-      statusEl.innerHTML='<div class="alert alert-purple">Step 1 of 2 - Reading schematic...</div>';
-      var sc=[{type:tSchematic.mime==='application/pdf'?'document':'image',source:{type:'base64',media_type:tSchematic.mime,data:tSchematic.b64}},{type:'text',text:'Extract a detailed scope description from this electrical control panel schematic. Include panel type, power specs, all components with quantities and ratings, control logic, pilot devices, protection features, enclosure size, customer I/O.'}];
-      var sd=await callAI([{role:'user',content:sc}],2000);
+      statusEl.innerHTML='<div class="alert alert-purple">Step 1 of 3 - Reading schematic...</div>';
+      var sc=[{type:tSchematic.mime==='application/pdf'?'document':'image',source:{type:'base64',media_type:tSchematic.mime,data:tSchematic.b64}},{type:'text',text:'List the main components in this electrical control panel schematic. For each: type, quantity, rating. Keep it brief - one line per component.'}];
+      var sd=await callAI([{role:'user',content:sc}],1000);
       schematicScope=sd.content[0].text||'';
     }
-    var step=hasSchematic?'2':'1';
-    statusEl.innerHTML='<div class="alert alert-purple">Step '+step+' - Analyzing job data...</div>';
-    var parts=[];
-    if(schematicScope) parts.push('SCHEMATIC SCOPE: '+schematicScope);
-    if(hasCSV){ var csvText=tCSV.rows.map(function(r){return Object.keys(r).map(function(k){return k+': '+r[k];}).join(', ');}).join(' || '); parts.push('BOM CSV: '+csvText); }
-    if(hasLabor){ var laborText=tLabor.rows.map(function(r){return (r['Labor Type']||r['Type']||'')+' Hours:'+(r['Hours']||r['Labor Hours']||0)+' Rate:$'+(r['Rate ($/hr)']||r['Labor Rate ($/hr)']||0)+'/hr';}).join(' || '); parts.push('LABOR: '+laborText); }
-    if(hasNotes) parts.push('NOTES: '+document.getElementById('t-notes').value.trim());
-    var jsonTemplate='{"job_type":"type","scope_description":"description","enclosure_size":"dims","motor_hp":0,"voltage":0,"phase":3,"materials":[{"sku":"SKU","description":"desc","category":"cat","qty":1,"unit_cost":0.00}],"labor":[{"type":"Engineering - Manual","hours":0,"rate":95},{"type":"Engineering - Drawings","hours":0,"rate":95},{"type":"Shop - Enclosure Build","hours":0,"rate":80},{"type":"Shop - QC Testing","hours":0,"rate":80}],"materials_total":0.00,"labor_total":0.00,"direct_cost":0.00,"key_features":["f1"],"lessons_learned":"notes"}';
-    var prompt='You are an expert electrical controls engineer. Analyze data for job '+jobNum+' (Customer: '+customer+') and extract a complete structured job record. Be concise - limit materials to top 20 most important parts, keep descriptions short. Data: '+parts.join(' | ')+' Return ONLY raw JSON, absolutely no markdown, no backticks, no explanation: '+jsonTemplate;
-    var data=await callAI([{role:'user',content:prompt}],16000);
-    var raw=data.content[0].text||'';
-    var parsed;
-    try{
-      var si=raw.indexOf('{');
-      var ei=raw.lastIndexOf('}');
-      if(si===-1||ei===-1) throw new Error('No JSON found');
-      parsed=JSON.parse(raw.substring(si,ei+1));
-    }catch(parseErr){
-      throw new Error('Could not parse response: '+raw.substring(0,200));
-    }
+
+    // Build data summary
+    var dataParts=[];
+    if(schematicScope) dataParts.push('SCHEMATIC COMPONENTS: '+schematicScope.substring(0,500));
+    if(hasCSV){ var csvText=tCSV.rows.slice(0,20).map(function(r){return (r['Part Number / SKU']||r['SKU']||'')+' '+( r['Description']||'')+' qty:'+(r['Qty']||r['Quantity']||1)+' $'+(r['Unit Cost ($)']||r['Unit Cost']||0);}).join(', '); dataParts.push('PARTS: '+csvText); }
+    if(hasLabor){ var laborText=tLabor.rows.map(function(r){return (r['Labor Type']||r['Type']||'')+':'+(r['Hours']||r['Labor Hours']||0)+'hrs';}).join(', '); dataParts.push('LABOR: '+laborText); }
+    if(hasNotes) dataParts.push('NOTES: '+document.getElementById('t-notes').value.trim().substring(0,300));
+
+    var totalSteps=hasSchematic?'3':'2';
+    var nextStep=hasSchematic?'2':'1';
+
+    // Step 2: Get scope and job info
+    statusEl.innerHTML='<div class="alert alert-purple">Step '+nextStep+' of '+totalSteps+' - Extracting job info...</div>';
+    var infoPrompt='Job: '+jobNum+' Customer: '+customer+' Data: '+dataParts.join(' | ')+' Return ONLY this JSON no markdown: {"job_type":"type","scope_description":"2-3 sentence description","enclosure_size":"dims","motor_hp":0,"voltage":0,"phase":3,"key_features":["f1","f2"],"lessons_learned":"brief notes"}';
+    var infoData=await callAI([{role:'user',content:infoPrompt}],1000);
+    var infoRaw=infoData.content[0].text||'';
+    var infoStart=infoRaw.indexOf('{'); var infoEnd=infoRaw.lastIndexOf('}');
+    var jobInfo={}; try{ if(infoStart!==-1&&infoEnd!==-1) jobInfo=JSON.parse(infoRaw.substring(infoStart,infoEnd+1)); }catch(e){}
+
+    // Step 3: Get materials and labor
+    nextStep=hasSchematic?'3':'2';
+    statusEl.innerHTML='<div class="alert alert-purple">Step '+nextStep+' of '+totalSteps+' - Building parts list...</div>';
+    var matsPrompt='Job: '+jobNum+' Data: '+dataParts.join(' | ')+' Return ONLY this JSON no markdown: {"materials":[{"sku":"SKU","description":"short desc","category":"cat","qty":1,"unit_cost":0.00}],"labor":[{"type":"Engineering - Manual","hours":0,"rate":95},{"type":"Engineering - Drawings","hours":0,"rate":95},{"type":"Shop - Enclosure Build","hours":0,"rate":80},{"type":"Shop - QC Testing","hours":0,"rate":80}],"materials_total":0.00,"labor_total":0.00,"direct_cost":0.00}';
+    var matsData=await callAI([{role:'user',content:matsPrompt}],4000);
+    var matsRaw=matsData.content[0].text||'';
+    var matsStart=matsRaw.indexOf('{'); var matsEnd=matsRaw.lastIndexOf('}');
+    var matsInfo={}; try{ if(matsStart!==-1&&matsEnd!==-1) matsInfo=JSON.parse(matsRaw.substring(matsStart,matsEnd+1)); }catch(e){ matsInfo={materials:[],labor:[],materials_total:0,labor_total:0,direct_cost:0}; }
+
+    // Combine results
+    var parsed=Object.assign({},jobInfo,matsInfo);
+    if(!parsed.job_type) parsed.job_type='Control Panel';
+    if(!parsed.scope_description) parsed.scope_description=dataParts.join('. ').substring(0,200);
+    if(!parsed.materials) parsed.materials=[];
+    if(!parsed.labor) parsed.labor=[{type:'Engineering - Manual',hours:2,rate:95},{type:'Engineering - Drawings',hours:10,rate:95},{type:'Shop - Enclosure Build',hours:20,rate:80},{type:'Shop - QC Testing',hours:2,rate:80}];
+    if(!parsed.materials_total) parsed.materials_total=parsed.materials.reduce(function(s,p){return s+(p.unit_cost*p.qty||0);},0);
+    if(!parsed.labor_total) parsed.labor_total=parsed.labor.reduce(function(s,l){return s+(l.hours*l.rate||0);},0);
+    if(!parsed.direct_cost) parsed.direct_cost=parsed.materials_total+parsed.labor_total;
+
     teachPreviewData=Object.assign({},parsed,{jobNum:jobNum,customer:customer,outcome:document.getElementById('t-outcome').value,finalPrice:document.getElementById('t-price').value});
     renderTeachPreview(teachPreviewData);
     statusEl.innerHTML='<div class="alert alert-success">Analysis complete - review preview below</div>';
+
   }catch(err){
     statusEl.innerHTML='<div class="alert alert-error">'+err.message+'</div>';
   }
