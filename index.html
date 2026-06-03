@@ -911,8 +911,8 @@ async function analyzeTeachJob() {
     if(hasLabor){ var laborText=tLabor.rows.map(function(r){return (r['Labor Type']||r['Type']||'')+' Hours:'+(r['Hours']||r['Labor Hours']||0)+' Rate:$'+(r['Rate ($/hr)']||r['Labor Rate ($/hr)']||0)+'/hr';}).join(' || '); parts.push('LABOR: '+laborText); }
     if(hasNotes) parts.push('NOTES: '+document.getElementById('t-notes').value.trim());
     var jsonTemplate='{"job_type":"type","scope_description":"description","enclosure_size":"dims","motor_hp":0,"voltage":0,"phase":3,"materials":[{"sku":"SKU","description":"desc","category":"cat","qty":1,"unit_cost":0.00}],"labor":[{"type":"Engineering - Manual","hours":0,"rate":95},{"type":"Engineering - Drawings","hours":0,"rate":95},{"type":"Shop - Enclosure Build","hours":0,"rate":80},{"type":"Shop - QC Testing","hours":0,"rate":80}],"materials_total":0.00,"labor_total":0.00,"direct_cost":0.00,"key_features":["f1"],"lessons_learned":"notes"}';
-    var prompt='You are an expert electrical controls engineer. Analyze data for job '+jobNum+' (Customer: '+customer+') and extract a complete structured job record. Data: '+parts.join(' | ')+' Return ONLY valid JSON no markdown: '+jsonTemplate;
-    var data=await callAI([{role:'user',content:prompt}],8000);
+    var prompt='You are an expert electrical controls engineer. Analyze data for job '+jobNum+' (Customer: '+customer+') and extract a complete structured job record. Be concise - limit materials to top 20 most important parts, keep descriptions short. Data: '+parts.join(' | ')+' Return ONLY raw JSON, absolutely no markdown, no backticks, no explanation: '+jsonTemplate;
+    var data=await callAI([{role:'user',content:prompt}],16000);
     var raw=data.content[0].text||'';
     var parsed;
     try{
