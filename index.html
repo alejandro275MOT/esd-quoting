@@ -748,12 +748,14 @@ async function generateQuote() {
     const raw=data.content?.[0]?.text||'';
     let q;
     try {
-      let clean = raw.replace(/```json|```/g,'').trim();
-      const jsonMatch = clean.match(/\{[\s\S]*\}/);
-      if(jsonMatch) clean = jsonMatch[0];
+      let clean = raw
+        .replace(/^[\s\S]*?(\{)/,'$1')
+        .replace(/\}[\s\S]*$/,'}');
+      const lastBrace = clean.lastIndexOf('}');
+      if(lastBrace !== -1) clean = clean.substring(0, lastBrace + 1);
       q = JSON.parse(clean);
     } catch(e) {
-      throw new Error('Could not parse response. Try again. Detail: ' + raw.substring(0,200));
+      throw new Error('Could not parse response. Detail: ' + raw.substring(0,200));
     }
     lastQuote=q;
     renderQuote(q);
@@ -915,15 +917,16 @@ async function analyzeTeachJob() {
     const raw=data.content?.[0]?.text||'';
     let parsed;
     try {
-      // Try direct parse first
-      let clean = raw.replace(/```json|```/g,'').trim();
-      // Extract JSON object if wrapped in other text
-      const jsonMatch = clean.match(/\{[\s\S]*\}/);
-      if(jsonMatch) clean = jsonMatch[0];
+      // Aggressively strip all markdown and find JSON
+      let clean = raw
+        .replace(/^[\s\S]*?(\{)/,'$1')  // remove everything before first {
+        .replace(/\}[\s\S]*$/,'}');       // remove everything after last }
+      // Find the last } to handle nested objects correctly
+      const lastBrace = clean.lastIndexOf('}');
+      if(lastBrace !== -1) clean = clean.substring(0, lastBrace + 1);
       parsed = JSON.parse(clean);
     } catch(e) {
-      // Last resort - show raw response for debugging
-      throw new Error('Could not parse analysis. Raw response: ' + raw.substring(0,200));
+      throw new Error('Could not parse analysis. Raw response: ' + raw.substring(0,300));
     }
     teachPreviewData={...parsed,jobNum,customer,outcome:document.getElementById('t-outcome').value,finalPrice:document.getElementById('t-price').value};
     renderTeachPreview(teachPreviewData);
