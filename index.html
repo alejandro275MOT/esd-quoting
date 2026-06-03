@@ -884,49 +884,50 @@ function clearQuoteMode() {
 
 // ── Teach Mode ────────────────────────────────────────────────────────────────
 async function analyzeTeachJob() {
-  const jobNum=document.getElementById('t-jobnum').value.trim();
-  const customer=document.getElementById('t-customer').value.trim();
+  var jobNum=document.getElementById('t-jobnum').value.trim();
+  var customer=document.getElementById('t-customer').value.trim();
   if(!jobNum||!customer){document.getElementById('t-analyze-status').innerHTML='<div class="alert alert-warning">Please enter Job Number and Customer Name.</div>';return;}
-  const hasSchematic=!!tSchematic.b64;
-  const hasCSV=!!tCSV.rows.length;
-  const hasLabor=!!tLabor.rows.length;
-  const hasNotes=!!document.getElementById('t-notes').value.trim();
+  var hasSchematic=!!tSchematic.b64;
+  var hasCSV=!!tCSV.rows.length;
+  var hasLabor=!!tLabor.rows.length;
+  var hasNotes=!!document.getElementById('t-notes').value.trim();
   if(!hasSchematic&&!hasCSV&&!hasLabor&&!hasNotes){document.getElementById('t-analyze-status').innerHTML='<div class="alert alert-warning">Please upload at least one file or add notes.</div>';return;}
-
-  const statusEl=document.getElementById('t-analyze-status');
-  const btn=document.getElementById('t-analyze-btn');
-  statusEl.innerHTML='<div class="alert alert-purple">⟳ Analyzing uploaded data — extracting full job record...</div>';
+  var statusEl=document.getElementById('t-analyze-status');
+  var btn=document.getElementById('t-analyze-btn');
   btn.disabled=true;
-
-  const msgContent=[];
-  if(hasSchematic) msgContent.push({type:tSchematic.mime==='application/pdf'?'document':'image',source:{type:'base64',media_type:tSchematic.mime,data:tSchematic.b64}});
-
-  let textPrompt=`You are an expert electrical controls engineer. Analyze data for job ${jobNum} (Customer: ${customer}) and extract a complete structured job record.\n\n`;
-  if(hasCSV){const s=tCSV.rows.map(r=>Object.keys(r).map(k=>`${k}: ${r[k]}`).join(' | ')).join('\n');textPrompt+=`BOM/PARTS CSV:\n${s}\n\n`;}
-  if(hasLabor){const s=tLabor.rows.map(r=>`${r['Labor Type']||r['Type']||''} | Hours: ${r['Hours']||r['Labor Hours']||0} | Rate: $${r['Rate ($/hr)']||r['Labor Rate ($/hr)']||0}/hr`).join('\n');textPrompt+=`LABOR CSV:\n${s}\n\n`;}
-  if(hasNotes) textPrompt+=`NOTES:\n${document.getElementById('t-notes').value.trim()}\n\n`;
-
-  textPrompt+=`Return ONLY valid JSON:\n{"job_type":"type","scope_description":"detailed description","enclosure_size":"dims","motor_hp":0,"voltage":0,"phase":3,"materials":[{"sku":"SKU","description":"desc","category":"cat","qty":1,"unit_cost":0.00}],"labor":[{"type":"Engineering - Manual","hours":0,"rate":95},{"type":"Engineering - Drawings","hours":0,"rate":95},{"type":"Shop - Enclosure Build","hours":0,"rate":80},{"type":"Shop - QC Testing","hours":0,"rate":80}],"materials_total":0.00,"labor_total":0.00,"direct_cost":0.00,"key_features":["f1","f2"],"lessons_learned":"notes"}`;
-
-  msgContent.push({type:'text',text:textPrompt});
-
   try {
-    const data=await callAI([{role:'user',content:msgContent}],4000);
-    const raw=data.content?.[0]?.text||'';
-    let parsed;
-    try {
-      const start = raw.indexOf('{');
-      const end = raw.lastIndexOf('}');
-      if(start === -1 || end === -1) throw new Error('No JSON found');
-      parsed = JSON.parse(raw.substring(start, end + 1));
-    } catch(e) {
-      throw new Error('Could not parse analysis. Raw response: ' + raw.substring(0,300));
+    var schematicScope='';
+    if(hasSchematic){
+      statusEl.innerHTML='<div class="alert alert-purple">Step 1 of 2 - Reading schematic...</div>';
+      var sc=[{type:tSchematic.mime==='application/pdf'?'document':'image',source:{type:'base64',media_type:tSchematic.mime,data:tSchematic.b64}},{type:'text',text:'Extract a detailed scope description from this electrical control panel schematic. Include panel type, power specs, all components with quantities and ratings, control logic, pilot devices, protection features, enclosure size, customer I/O.'}];
+      var sd=await callAI([{role:'user',content:sc}],2000);
+      schematicScope=sd.content[0].text||'';
     }
-    teachPreviewData={...parsed,jobNum,customer,outcome:document.getElementById('t-outcome').value,finalPrice:document.getElementById('t-price').value};
+    var step=hasSchematic?'2':'1';
+    statusEl.innerHTML='<div class="alert alert-purple">Step '+step+' - Analyzing job data...</div>';
+    var parts=[];
+    if(schematicScope) parts.push('SCHEMATIC SCOPE: '+schematicScope);
+    if(hasCSV){ var csvText=tCSV.rows.map(function(r){return Object.keys(r).map(function(k){return k+': '+r[k];}).join(', ');}).join(' || '); parts.push('BOM CSV: '+csvText); }
+    if(hasLabor){ var laborText=tLabor.rows.map(function(r){return (r['Labor Type']||r['Type']||'')+' Hours:'+(r['Hours']||r['Labor Hours']||0)+' Rate:$'+(r['Rate ($/hr)']||r['Labor Rate ($/hr)']||0)+'/hr';}).join(' || '); parts.push('LABOR: '+laborText); }
+    if(hasNotes) parts.push('NOTES: '+document.getElementById('t-notes').value.trim());
+    var jsonTemplate='{"job_type":"type","scope_description":"description","enclosure_size":"dims","motor_hp":0,"voltage":0,"phase":3,"materials":[{"sku":"SKU","description":"desc","category":"cat","qty":1,"unit_cost":0.00}],"labor":[{"type":"Engineering - Manual","hours":0,"rate":95},{"type":"Engineering - Drawings","hours":0,"rate":95},{"type":"Shop - Enclosure Build","hours":0,"rate":80},{"type":"Shop - QC Testing","hours":0,"rate":80}],"materials_total":0.00,"labor_total":0.00,"direct_cost":0.00,"key_features":["f1"],"lessons_learned":"notes"}';
+    var prompt='You are an expert electrical controls engineer. Analyze data for job '+jobNum+' (Customer: '+customer+') and extract a complete structured job record. Data: '+parts.join(' | ')+' Return ONLY valid JSON no markdown: '+jsonTemplate;
+    var data=await callAI([{role:'user',content:prompt}],8000);
+    var raw=data.content[0].text||'';
+    var parsed;
+    try{
+      var si=raw.indexOf('{');
+      var ei=raw.lastIndexOf('}');
+      if(si===-1||ei===-1) throw new Error('No JSON found');
+      parsed=JSON.parse(raw.substring(si,ei+1));
+    }catch(parseErr){
+      throw new Error('Could not parse response: '+raw.substring(0,200));
+    }
+    teachPreviewData=Object.assign({},parsed,{jobNum:jobNum,customer:customer,outcome:document.getElementById('t-outcome').value,finalPrice:document.getElementById('t-price').value});
     renderTeachPreview(teachPreviewData);
-    statusEl.innerHTML='<div class="alert alert-success">✓ Analysis complete — review preview below</div>';
-  } catch(e) {
-    statusEl.innerHTML=`<div class="alert alert-error">✗ ${e.message}</div>`;
+    statusEl.innerHTML='<div class="alert alert-success">Analysis complete - review preview below</div>';
+  }catch(err){
+    statusEl.innerHTML='<div class="alert alert-error">'+err.message+'</div>';
   }
   btn.disabled=false;
 }
