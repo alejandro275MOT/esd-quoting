@@ -1020,7 +1020,7 @@ async function saveToAirtable() {
     catch(e){saved.push(`Job: ${e.message}`);}
     try{
       const dc=Number(d.direct_cost)||0;const finalPrice=Number(d.finalPrice)||0;
-      await postAirtable(token,baseId,'Quote Log',{'Quote Number':'QT-'+d.jobNum,'Customer Name':d.customer,'Date Quoted':new Date().toISOString().split('T')[0],'Total Materials ($)':Number(d.materials_total)||0,'Total Labor ($)':Number(d.labor_total)||0,'Overhead %':10,'Overhead ($)':dc*0.1,'Margin %':20,'Margin ($)':dc*1.1*0.2,'Total Quote ($)':finalPrice||dc*1.1*1.2,'Tax %':0,'Tax ($)':0,'Total With Tax ($)':finalPrice||dc*1.1*1.2,'Status':d.outcome,'Notes':d.scope_description?.substring(0,200)||''});
+      await postAirtable(token,baseId,'Quote Log',{'Quote Number':'QT-'+d.jobNum,'Customer Name':d.customer,'Date Quoted':new Date().toISOString().split('T')[0],'Total Materials ($)':Number(d.materials_total)||0,'Total Labor ($)':Number(d.labor_total)||0,'Overhead %':10,'Overhead ($)':dc*0.1,'Margin %':20,'Margin ($)':dc*1.1*0.2,'Total Quote ($)':finalPrice||dc*1.1*1.2,'Tax %':0,'Tax ($)':0,'Total With Tax ($)':finalPrice||dc*1.1*1.2,'Notes':d.scope_description?.substring(0,200)||''});
       saved.push('Quote Log entry saved');
     }catch(e){saved.push(`Quote Log: ${e.message}`);}
     statusEl.innerHTML=`<div class="alert alert-success">✅ Saved:<br>${saved.map(s=>`• ${s}`).join('<br>')}</div>`;
