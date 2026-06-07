@@ -1016,7 +1016,7 @@ async function saveToAirtable() {
       catch(e){}
     }
     if(newParts) saved.push(`${newParts} parts added to Parts Library`);
-    try{await postAirtable(token,baseId,'Jobs',{'Customer Name':d.customer,'Description':d.scope_description,'Status':d.outcome,'Date Received':new Date().toISOString().split('T')[0],'Notes':(d.job_type||'')+' | '+(d.lessons_learned||'')});saved.push('Job record saved');}
+    try{await postAirtable(token,baseId,'Jobs',{'Job Number':d.jobNum,'Customer Name':d.customer,'Description':d.scope_description,'Status':d.outcome,'Date Received':new Date().toISOString().split('T')[0],'Notes':(d.job_type||'')+' | '+(d.lessons_learned||'')});saved.push('Job record saved');}
     catch(e){saved.push(`Job: ${e.message}`);}
     try{
       const dc=Number(d.direct_cost)||0;const finalPrice=Number(d.finalPrice)||0;
