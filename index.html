@@ -1005,60 +1005,74 @@ async function saveToAirtable() {
   d.voltage=parseFloat(document.getElementById('tp-voltage')?.value)||d.voltage;
   const btn=document.getElementById('t-save-btn');
   const statusEl=document.getElementById('t-save-status');
-  btn.disabled=true;btn.textContent='⟳ Saving...';
-  statusEl.innerHTML='<div class="alert alert-purple">⟳ Writing to Airtable...</div>';
+  btn.disabled=true;btn.textContent='Saving...';
+  statusEl.innerHTML='<div class="alert alert-purple">Writing to Airtable...</div>';
   try {
     let saved=[];
+
+    // Step 1: Save new parts to Parts Library
     let newParts=0;
     for(const p of (d.materials||[])){
       if(!p.sku||p.sku==='N/A'||p.sku.includes('?')) continue;
-      try{await postAirtable(token,baseId,'Parts Library',{'Part Number / SKU':p.sku,'Description':p.description,'Category':p.category,'Unit Cost ($)':Number(p.unit_cost)||0});newParts++;}
-      catch(e){}
+      try{
+        await postAirtable(token,baseId,'Parts Library',{
+          'Part Number / SKU':p.sku,
+          'Description':p.description,
+          'Category':p.category,
+          'Unit Cost ($)':Number(p.unit_cost)||0
+        });
+        newParts++;
+      }catch(e){}
     }
-    if(newParts) saved.push(`${newParts} parts added to Parts Library`);
-    try{await postAirtable(token,baseId,'Jobs',{'Job Number':d.jobNum,'Customer Name':d.customer,'Description':d.scope_description,'Status':d.outcome,'Date Received':new Date().toISOString().split('T')[0],'Notes':(d.job_type||'')+' | '+(d.lessons_learned||'')});saved.push('Job record saved');}
-    catch(e){saved.push(`Job: ${e.message}`);}
-    try{
-      const dc=Number(d.direct_cost)||0;const finalPrice=Number(d.finalPrice)||0;
-      await postAirtable(token,baseId,'Quote Log',{'Quote Number':'QT-'+d.jobNum,'Customer Name':d.customer,'Date Quoted':new Date().toISOString().split('T')[0],'Total Materials ($)':Number(d.materials_total)||0,'Total Labor ($)':Number(d.labor_total)||0,'Overhead %':10,'Overhead ($)':dc*0.1,'Margin %':20,'Margin ($)':dc*1.1*0.2,'Total Quote ($)':finalPrice||dc*1.1*1.2,'Tax %':0,'Tax ($)':0,'Total With Tax ($)':finalPrice||dc*1.1*1.2,'Notes':d.scope_description?.substring(0,200)||''});
-      saved.push('Quote Log entry saved');
-    }catch(e){saved.push(`Quote Log: ${e.message}`);}
-    statusEl.innerHTML=`<div class="alert alert-success">✅ Saved:<br>${saved.map(s=>`• ${s}`).join('<br>')}</div>`;
-    btn.textContent='✅ Saved!';
-    setTimeout(()=>{btn.textContent='✅ Save to Airtable Database';btn.disabled=false;},3000);
-  } catch(e) {
-    statusEl.innerHTML=`<div class="alert alert-error">✗ ${e.message}</div>`;
-    btn.textContent='✅ Save to Airtable Database';btn.disabled=false;
-  }
-}
+    if(newParts) saved.push(newParts+' parts added to Parts Library');
 
-async function loadDBTeach() {
-  const token = document.getElementById('t-token').value.trim();
-  const baseId = document.getElementById('t-baseid').value.trim();
-  const btn = document.getElementById('t-load-btn');
-  const alertEl = document.getElementById('t-load-alert');
-  if(!token) { alertEl.innerHTML='<div class="alert alert-warning">Please enter your Airtable token.</div>'; return; }
-  btn.textContent='⟳ Loading...'; btn.disabled=true; alertEl.innerHTML='';
-  try {
-    const [parts,labor,jobTypes,jobs,quoteLog] = await Promise.all([
-      fetchAirtable(token,baseId,'Parts Library'),
-      fetchAirtable(token,baseId,'Labor Rates'),
-      fetchAirtable(token,baseId,'Job Types'),
-      fetchAirtable(token,baseId,'Jobs'),
-      fetchAirtable(token,baseId,'Quote Log'),
-    ]);
-    db.parts=parts.map(r=>r.fields);
-    db.laborRates=labor.map(r=>r.fields);
-    db.jobTypes=jobTypes.map(r=>r.fields);
-    db.jobs=jobs.map(r=>r.fields);
-    db.quoteLog=quoteLog.map(r=>r.fields);
-    // sync token to quote mode
-    document.getElementById('q-token').value = token;
-    alertEl.innerHTML='<div class="alert alert-success">✓ Database loaded — ' + db.parts.length + ' parts, ' + db.quoteLog.length + ' past quotes</div>';
-    btn.textContent='✓ Reload'; btn.disabled=false;
-  } catch(e) {
-    alertEl.innerHTML=`<div class="alert alert-error">✗ ${e.message}</div>`;
-    btn.textContent='⚡ Load Database'; btn.disabled=false;
+    // Step 2: Save Job record and get its record ID
+    let jobRecordId=null;
+    try{
+      const jobRes=await postAirtable(token,baseId,'Jobs',{
+        'Job Number':d.jobNum,
+        'Customer Name':d.customer,
+        'Description':d.scope_description,
+        'Status':d.outcome,
+        'Date Received':new Date().toISOString().split('T')[0],
+        'Notes':(d.job_type||'')+' | '+(d.lessons_learned||'')
+      });
+      jobRecordId=jobRes.id||null;
+      saved.push('Job record saved');
+    }catch(e){saved.push('Job: '+e.message);}
+
+    // Step 3: Save Quote Log — link to Job record if we have its ID
+    try{
+      const dc=Number(d.direct_cost)||0;
+      const finalPrice=Number(d.finalPrice)||0;
+      const quoteFields={
+        'Quote Number':'QT-'+d.jobNum,
+        'Customer Name':d.customer,
+        'Date Quoted':new Date().toISOString().split('T')[0],
+        'Total Materials ($)':Number(d.materials_total)||0,
+        'Total Labor ($)':Number(d.labor_total)||0,
+        'Overhead %':10,
+        'Overhead ($)':dc*0.1,
+        'Margin %':20,
+        'Margin ($)':dc*1.1*0.2,
+        'Total Quote ($)':finalPrice||dc*1.1*1.2,
+        'Tax %':0,
+        'Tax ($)':0,
+        'Total With Tax ($)':finalPrice||dc*1.1*1.2,
+        'Notes':d.scope_description?d.scope_description.substring(0,200):''
+      };
+      // Link to Job record using record ID if available
+      if(jobRecordId) quoteFields['Job Number']=[jobRecordId];
+      await postAirtable(token,baseId,'Quote Log',quoteFields);
+      saved.push('Quote Log entry saved');
+    }catch(e){saved.push('Quote Log: '+e.message);}
+
+    statusEl.innerHTML='<div class="alert alert-success">Saved:<br>'+saved.map(function(s){return '- '+s;}).join('<br>')+'</div>';
+    btn.textContent='Saved!';
+    setTimeout(function(){btn.textContent='Save to Airtable Database';btn.disabled=false;},3000);
+  }catch(e){
+    statusEl.innerHTML='<div class="alert alert-error">'+e.message+'</div>';
+    btn.textContent='Save to Airtable Database';btn.disabled=false;
   }
 }
 
