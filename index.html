@@ -883,6 +883,35 @@ function clearQuoteMode() {
 }
 
 // ── Teach Mode ────────────────────────────────────────────────────────────────
+async function loadDBTeach() {
+  const token=document.getElementById('t-token').value.trim();
+  const baseId=document.getElementById('t-baseid').value.trim();
+  const btn=document.getElementById('t-load-btn');
+  const alertEl=document.getElementById('t-load-alert');
+  if(!token){alertEl.innerHTML='<div class="alert alert-warning">Please enter your Airtable token.</div>';return;}
+  btn.textContent='Loading...';btn.disabled=true;alertEl.innerHTML='';
+  try {
+    const [parts,labor,jobTypes,jobs,quoteLog]=await Promise.all([
+      fetchAirtable(token,baseId,'Parts Library'),
+      fetchAirtable(token,baseId,'Labor Rates'),
+      fetchAirtable(token,baseId,'Job Types'),
+      fetchAirtable(token,baseId,'Jobs'),
+      fetchAirtable(token,baseId,'Quote Log'),
+    ]);
+    db.parts=parts.map(function(r){return r.fields;});
+    db.laborRates=labor.map(function(r){return r.fields;});
+    db.jobTypes=jobTypes.map(function(r){return r.fields;});
+    db.jobs=jobs.map(function(r){return r.fields;});
+    db.quoteLog=quoteLog.map(function(r){return r.fields;});
+    document.getElementById('q-token').value=token;
+    alertEl.innerHTML='<div class="alert alert-success">Database loaded: '+db.parts.length+' parts, '+db.quoteLog.length+' past quotes</div>';
+    btn.textContent='Reload Database';btn.disabled=false;
+  }catch(e){
+    alertEl.innerHTML='<div class="alert alert-error">'+e.message+'</div>';
+    btn.textContent='Load Database';btn.disabled=false;
+  }
+}
+
 async function analyzeTeachJob() {
   var jobNum=document.getElementById('t-jobnum').value.trim();
   var customer=document.getElementById('t-customer').value.trim();
