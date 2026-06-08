@@ -1073,7 +1073,63 @@ async function saveToAirtable() {
       saved.push('Job record saved');
     }catch(e){saved.push('Job: '+e.message);}
 
-    // Step 3: Save Quote Log — link to Job record if we have its ID
+    // Step 3: Save Panel record and get its record ID
+    let panelRecordId=null;
+    try{
+      const panelRes=await postAirtable(token,baseId,'Panels',{
+        'Panel Name':d.jobNum+' - '+d.job_type,
+        'Panel Type':d.job_type,
+        'Enclosure Size':d.enclosure_size||'',
+        'Motor HP':Number(d.motor_hp)||0,
+        'Voltage':Number(d.voltage)||0,
+        'Phase':Number(d.phase)||3,
+        'Materials Total ($)':Number(d.materials_total)||0,
+        'Labor Total ($)':Number(d.labor_total)||0,
+        'Notes':d.scope_description?d.scope_description.substring(0,200):''
+      });
+      panelRecordId=panelRes.id||null;
+      saved.push('Panel record saved');
+    }catch(e){saved.push('Panel: '+e.message);}
+
+    // Step 4: Save Quote Lines (materials)
+    let newLines=0;
+    for(const p of (d.materials||[])){
+      if(!p.sku||p.sku==='N/A'||p.sku.includes('?')) continue;
+      try{
+        const lineFields={
+          'Panel Name':d.jobNum+' - '+d.job_type,
+          'Job Number':d.jobNum,
+          'Line Type':'Material',
+          'Part Number / SKU':p.sku,
+          'Description':p.description,
+          'Qty / Hours':Number(p.qty)||1,
+          'Unit Cost ($)':Number(p.unit_cost)||0,
+          'Extended Cost ($)':Number(p.extended_cost)||(Number(p.unit_cost)*Number(p.qty))||0
+        };
+        await postAirtable(token,baseId,'Quote Lines',lineFields);
+        newLines++;
+      }catch(e){}
+    }
+
+    // Save labor lines
+    for(const l of (d.labor||[])){
+      if(!l.type) continue;
+      try{
+        await postAirtable(token,baseId,'Quote Lines',{
+          'Panel Name':d.jobNum+' - '+d.job_type,
+          'Job Number':d.jobNum,
+          'Line Type':'Labor',
+          'Labor Type':l.type,
+          'Qty / Hours':Number(l.hours)||0,
+          'Unit Cost ($)':Number(l.rate)||0,
+          'Extended Cost ($)':Number(l.hours)*Number(l.rate)||0
+        });
+        newLines++;
+      }catch(e){}
+    }
+    if(newLines) saved.push(newLines+' quote lines saved');
+
+    // Step 5: Save Quote Log — link to Job record if we have its ID
     try{
       const dc=Number(d.direct_cost)||0;
       const finalPrice=Number(d.finalPrice)||0;
@@ -1093,7 +1149,6 @@ async function saveToAirtable() {
         'Total With Tax ($)':finalPrice||dc*1.1*1.2,
         'Notes':d.scope_description?d.scope_description.substring(0,200):''
       };
-      // Link to Job record using record ID if available
       if(jobRecordId) quoteFields['Job Number']=[jobRecordId];
       await postAirtable(token,baseId,'Quote Log',quoteFields);
       saved.push('Quote Log entry saved');
