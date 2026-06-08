@@ -884,11 +884,14 @@ function clearQuoteMode() {
 
 // ── Teach Mode ────────────────────────────────────────────────────────────────
 async function loadDBTeach() {
-  const token=document.getElementById('t-token').value.trim();
+  // Try teach mode token first, fall back to quote mode token
+  const token=document.getElementById('t-token').value.trim() || document.getElementById('q-token').value.trim();
   const baseId=document.getElementById('t-baseid').value.trim();
   const btn=document.getElementById('t-load-btn');
   const alertEl=document.getElementById('t-load-alert');
-  if(!token){alertEl.innerHTML='<div class="alert alert-warning">Please enter your Airtable token.</div>';return;}
+  // Sync token to teach mode field so user can see it
+  if(token) document.getElementById('t-token').value=token;
+  if(!token){alertEl.innerHTML='<div class="alert alert-warning">Please enter your Airtable Personal Access Token above.</div>';return;}
   btn.textContent='Loading...';btn.disabled=true;alertEl.innerHTML='';
   try {
     const [parts,labor,jobTypes,jobs,quoteLog]=await Promise.all([
